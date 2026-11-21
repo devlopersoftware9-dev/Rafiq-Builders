@@ -26,7 +26,10 @@
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--body)}
-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 18px;padding:18px 20px 6px}
+header{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 18px;padding:12px 20px}
+.titles{display:grid;gap:2px}
+.actions{display:grid;gap:4px;justify-items:end}
+@media (max-width:620px){.actions{justify-items:start}}
 h1{font:600 24px/1.1 var(--display);margin:0;text-wrap:balance}
 header p{margin:0;color:var(--muted);font-size:13px}
 .back{flex-basis:100%;color:var(--accent);text-decoration:none;font-size:13px;font-weight:500}
@@ -86,8 +89,18 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <body>
 <header>
   <a href="../" class="back" aria-label="Back to dashboard">← Dashboard</a>
-  <h1>Cheque Printer</h1>
-  <p>Enter the date, payee and amount. The amount is converted to words automatically, and the PDF is sized to the cheque.</p>
+  <div class="titles">
+    <h1>Cheque Printer</h1>
+    <p>Enter the date, payee and amount. The amount is converted to words automatically.</p>
+  </div>
+  <div class="actions">
+    <div class="btns">
+      <button class="primary" id="btnPrint">Print now</button>
+      <button id="btnPdf">Download PDF</button>
+      <button id="btnTest">Test print (plain paper)</button>
+    </div>
+    <div class="msg" id="saveMsg" role="status"></div>
+  </div>
 </header>
 <main>
   <section class="card stack" aria-label="Cheque details">
@@ -132,12 +145,6 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <label class="check" for="upper"><input type="checkbox" id="upper"> Amount in words in CAPITALS</label>
     </div>
     <div class="msg warn" id="warn" role="status"></div>
-    <div class="btns">
-      <button class="primary" id="btnPdf">Download PDF</button>
-      <button id="btnPrint">Print now</button>
-      <button id="btnTest">Test print (plain paper)</button>
-    </div>
-    <div class="msg" id="saveMsg" role="status"></div>
     <ol class="steps">
       <li>In the print dialog choose <b>Actual size / 100%</b> and turn off "Fit to page".</li>
       <li>For a new cheque book, print a test page on plain paper and hold it behind a cheque against the light.</li>
