@@ -32,6 +32,12 @@ Browser-based tool to fill and print bank cheques on a printer. No server or ins
 2. Click **Seedha print karein** (direct print) or **Print PDF banayein** (PDF download).
 3. In the print dialog set scale to **Actual size / 100%**. Turn off "Fit to page".
 
+### Bank layouts
+Saved layouts for each bank live in `cheque-printer/banks.js` (size and field positions in mm).
+When a bank is selected its saved layout loads automatically; no adjustment is needed before printing.
+To add a bank, measure its cheque (or a straight scan of it) and add an entry to `banks.js`.
+Banks without an entry use the SBP standard default and show "Layout not set up yet".
+
 ### First-time calibration (once per bank / cheque book)
 1. Click **Test print (plain paper)** and print it on plain A4 at 100%.
 2. Hold the printout behind a blank cheque against the light and check where the text falls.
