@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="banks.js?v=2026112109"></script>
-<script src="cheque-reader.js?v=2026112109"></script>
+<script src="banks.js?v=2026112110"></script>
+<script src="cheque-reader.js?v=2026112110"></script>
 <style>
 :root{
   /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
@@ -398,6 +398,16 @@ function persist(){try{localStorage.setItem("chq-printer-v1",JSON.stringify(S));
 const PRESETS=window.BANK_PRESETS||{};
 function presetFor(b){return PRESETS[b]?Object.assign(clone(STD),clone(PRESETS[b])):null;}
 function r1(v){return Math.round(v*10)/10;}
+function r2(v){return Math.round(v*100)/100;}
+// Resizing the print area scales every box inside it (positions and sizes; fonts stay the same).
+function scaleBoxes(src,sx,sy){const out=clone(src);
+  Object.values(out).forEach(b=>{b.x=r2(b.x*sx);b.y=r2(b.y*sy);
+    if(b.style==="boxes"){b.pitch=r2(b.pitch*sx);b.bh=r2(b.bh*sy);if(b.offs)b.offs.forEach(o=>{o.x=r2(o.x*sx);o.y=r2(o.y*sy);});syncDateBox(b);}
+    else{b.w=r2(b.w*sx);b.h=r2(b.h*sy);if(b.firstBaseline!=null){b.firstBaseline=r2(b.firstBaseline*sy);b.lineGap=r2(b.lineGap*sy);b.indent1=r2((b.indent1||0)*sx);}}});
+  return out;}
+function resizeArea(newW,newH,base){const lay=L();base=base||{area:clone(lay.area),boxes:clone(lay.boxes)};
+  newW=Math.max(20,newW);newH=Math.max(10,newH);
+  lay.boxes=scaleBoxes(base.boxes,newW/base.area.w,newH/base.area.h);lay.area={w:r2(newW),h:r2(newH)};}
 const VIEWBASE={}; let LASTVB=null;
 // Edits go into a draft; "Save layout" makes them permanent for that bank.
 const DRAFT={};
@@ -565,14 +575,9 @@ function renderExcel(lay,D){
     r.lines.forEach(l=>el("text",{x:l.x,y:l.y,"font-size":r.size*PT,"font-family":b.font==="times"?"Constantia, Times New Roman, serif":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink,"text-anchor":r.align==="right"?"end":r.align==="center"?"middle":"start",style:"white-space:pre"},g,l.t));
   });
   drawRowGuide(lay); drawGuides(); selectedHandles(); CUR=null;
-  // Grow the preview frame so a moved or enlarged print area / field is never cut off.
-  const sx=lay.origin.x-vb.x, sy=lay.origin.y-vb.y; const rs=[{x:0,y:0,w:A.w,h:A.h}];
-  Object.keys(lay.boxes).forEach(k=>{const q=lay.boxes[k];if(q.style==="boxes"){(dateRects(lay)||[]).forEach(r=>rs.push({x:r.x,y:r.y-3,w:r.w+12,h:r.h+8}));}else rs.push(q);});
-  let x1=0,y1=0,x2=vb.w,y2=vb.h; rs.forEach(r=>{x1=Math.min(x1,r.x+sx);y1=Math.min(y1,r.y+sy-3);x2=Math.max(x2,r.x+r.w+sx);y2=Math.max(y2,r.y+r.h+sy);});
-  // Keep the frame still while dragging, otherwise the mouse-to-mm scale changes under the pointer.
-  if(drag&&LASTVB) [x1,y1,x2,y2]=LASTVB; else LASTVB=[x1,y1,x2,y2];
-  svg.setAttribute("viewBox",`${x1-m} ${y1-m} ${x2-x1+2*m} ${y2-y1+2*m}`);
-  svg.firstChild.setAttribute("x",x1-m);svg.firstChild.setAttribute("y",y1-m);svg.firstChild.setAttribute("width",x2-x1+2*m);svg.firstChild.setAttribute("height",y2-y1+2*m);
+  // The preview frame stays the same size while you move or resize things (re-centred after Save or Discard).
+  const pad=Math.max(8,vb.w*0.08); svg.setAttribute("viewBox",`${-pad} ${-pad} ${vb.w+2*pad} ${vb.h+2*pad}`);
+  svg.firstChild.setAttribute("x",-pad);svg.firstChild.setAttribute("y",-pad);svg.firstChild.setAttribute("width",vb.w+2*pad);svg.firstChild.setAttribute("height",vb.h+2*pad);
   $("wordsTxt").textContent=D.words||"-";
   $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm ${lay.fromPhoto?"cheque":"print area"}`;
   $("layoutBank").textContent=S.bank;
@@ -667,10 +672,12 @@ let drag=null;
 function svgPt(e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
 svg.addEventListener("pointerdown",e=>{
   const hd=e.target.closest(".handle");
-  if(hd&&SEL){const lay=L();const o=fieldObj(SEL,lay);drag={f:SEL,resize:hd.dataset.h,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();return;}
+  if(hd&&SEL){const lay=L();const o=fieldObj(SEL,lay);drag={f:SEL,resize:hd.dataset.h,start:svgPt(e),orig:clone(o),base:SEL==="area"?{area:clone(lay.area),boxes:clone(lay.boxes)}:null};svg.setPointerCapture(e.pointerId);e.preventDefault();return;}
   const g=e.target.closest(".fld");if(!g){if(SEL){SEL=null;render();}return;}const db=e.target.closest("[data-box]");const f=(db&&g.dataset.f==="date"&&!e.shiftKey&&!(SEL==="date"))?"date:"+db.dataset.box:g.dataset.f;SEL=f;const lay=L();const o=f==="area"?lay.origin:fieldObj(f,lay);drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
 svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx=+(p.x-drag.start.x).toFixed(1),dy=+(p.y-drag.start.y).toFixed(1);const o=drag.f==="area"?(drag.resize?L().area:L().origin):fieldObj(drag.f);
   if(drag.resize){const R=drag.resize, ex=R==="e"||R==="se", sy=R==="s"||R==="se", oo=drag.orig;
+    if(drag.f==="area"){const b=drag.base;resizeArea(ex?b.area.w+dx:b.area.w,sy?b.area.h+dy:b.area.h,b);
+      const A=L().area;$("selName").textContent=`Print area · ${r1(b.area.w)} × ${r1(b.area.h)} → ${r1(A.w)} × ${r1(A.h)} mm · all boxes resize with it`;render();return;}
     if(o.style==="boxes"){ if(ex)o.pitch=Math.max(2,r1(oo.pitch+dx/8)); if(sy)o.bh=Math.max(2,r1(oo.bh+dy)); syncDateBox(o); }
     else if(L().mode==="excel"){ if(ex)o.w=Math.max(3,r1(oo.w+dx)); if(sy)o.h=Math.max(2,r1(oo.h+dy)); }
     else if(o.maxw!=null){ if(ex)o.maxw=Math.max(5,r1(oo.maxw+dx)); }
@@ -744,13 +751,14 @@ function resize(d){const lay=L();let o=selObj();if(!o)return;if(boxIndex(SEL)>=0
   else if(o.size!=null){o.size=Math.max(5,r1(o.size+d));} else return;
   markEdited();buildLayoutTable();render();}
 function widen(d){const lay=L(),o=selObj();if(!o||boxIndex(SEL)>=0)return;
-  if(SEL==="area"){o.w=Math.max(10,r1(o.w+d));}
+  if(SEL==="area"){resizeArea(o.w+d,o.h);}
   else if(lay.mode==="excel"&&o.style==="boxes"){o.pitch=Math.max(2,r1(o.pitch+d/8));syncDateBox(o);}
   else if(lay.mode==="excel"){o.w=Math.max(5,r1(o.w+d));}
   else if(o.maxw!=null){o.maxw=Math.max(5,r1(o.maxw+d));}
   else if(SEL==="date"){o.pitch=Math.max(2,r1(o.pitch+d/8));}
   else return; markEdited();buildLayoutTable();render();}
 function taller(d){const lay=L(),o=selObj();if(!o||lay.mode!=="excel"||boxIndex(SEL)>=0)return;
+  if(SEL==="area"){resizeArea(o.w,o.h+d);markEdited();buildLayoutTable();render();return;}
   if(o.style==="boxes"){o.bh=Math.max(2,r1(o.bh+d));syncDateBox(o);} else o.h=Math.max(2,r1(o.h+d));
   markEdited();buildLayoutTable();render();}
 function toggleBold(){const o=boxIndex(SEL)>=0?L().boxes.date:selObj();if(!o||L().mode!=="excel")return;o.bold=!o.bold;markEdited();render();}
@@ -785,7 +793,7 @@ function updateSaveBar(){
     $("btnBold").setAttribute("aria-pressed",!!D0.bold);
     $("selName").textContent=`Date box ${i+1} (${"DDMMYYYY"[i]}) · shifted ${o.x>=0?"+":""}${o.x}, ${o.y>=0?"+":""}${o.y} mm`;return;}
   $("btnNarrow").hidden=$("btnWide").hidden=false;
-  if(SEL==="area"){$("btnBold").hidden=true;$("selName").textContent=FNAME.area+" · "+o.w+" × "+o.h+" mm · at "+lay.origin.x+", "+lay.origin.y+" mm on the page";return;}
+  if(SEL==="area"){$("btnBold").hidden=true;$("selName").textContent=FNAME.area+" · "+r1(o.w)+" × "+r1(o.h)+" mm · at "+lay.origin.x+", "+lay.origin.y+" mm on the page · resizing it resizes all boxes";return;}
   const isBoxes=SEL==="date"&&!!o.pitch&&(o.style==="boxes"||lay.mode!=="excel");
   $("btnNarrow").textContent=isBoxes?"⇤ Smaller boxes":"⇤ Narrower"; $("btnWide").textContent=isBoxes?"Bigger boxes ⇥":"Wider ⇥";
   if(isBoxes&&o.pitch!=null) $("selName").textContent+=" · box "+o.pitch+" mm";
