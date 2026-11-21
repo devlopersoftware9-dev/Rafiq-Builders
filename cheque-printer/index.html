@@ -279,6 +279,7 @@ function persist(){try{localStorage.setItem("chq-printer-v1",JSON.stringify(S));
 const PRESETS=window.BANK_PRESETS||{};
 function presetFor(b){return PRESETS[b]?Object.assign(clone(STD),clone(PRESETS[b])):null;}
 function r1(v){return Math.round(v*10)/10;}
+const VIEWBASE={};
 // Edits go into a draft; "Save layout" makes them permanent for that bank.
 const DRAFT={};
 function savedLayout(b){return upgradeDate((S.edited&&S.edited[b]&&S.layouts[b])?clone(S.layouts[b]):(presetFor(b)||clone(STD)));}
@@ -299,7 +300,7 @@ function isDirty(b){b=b||S.bank;return !!DRAFT[b]&&JSON.stringify(DRAFT[b])!==JS
 function syncPresets(){Object.keys(S.layouts).forEach(b=>{if(!S.edited||!S.edited[b])delete S.layouts[b];});}
 function markEdited(){updateSaveBar();}
 function saveLayout(){const b=S.bank;S.layouts[b]=clone(L());S.edited=S.edited||{};S.edited[b]=true;persist();updateSaveBar();render();say("Layout saved for "+b+".","ok");}
-function discardLayout(){delete DRAFT[S.bank];buildLayoutTable();render();say("Changes discarded.","ok");}
+function discardLayout(){delete DRAFT[S.bank];delete VIEWBASE[S.bank];buildLayoutTable();render();say("Changes discarded.","ok");}
 function layoutStatus(){
   if(isDirty()) return {cls:"todo",text:"Unsaved changes"};
   if(S.edited&&S.edited[S.bank]) return {cls:"edited",text:"Saved on this computer"};
@@ -396,14 +397,18 @@ function data(){
 /* ---------- SVG preview ---------- */
 const svg=$("chq"); const NS="http://www.w3.org/2000/svg";
 const PT=0.3528;
-function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;(parent||svg).appendChild(e);return e;}
+let CUR=null;
+function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;(parent||CUR||svg).appendChild(e);return e;}
 function renderExcel(lay,D){
-  const A=lay.area, m=6;
-  svg.setAttribute("viewBox",`${-m} ${-m} ${A.w+2*m} ${A.h+2*m}`);
-  svg.classList.toggle("guides",S.guides); svg.innerHTML="";
-  el("rect",{x:-m,y:-m,width:A.w+2*m,height:A.h+2*m,fill:"#eef4f1"});
-  el("rect",{x:0,y:0,width:A.w,height:A.h,fill:"none",stroke:"#9fb3ab","stroke-width":0.25,"stroke-dasharray":"1.2 0.8"});
-  el("text",{x:0,y:-1.5,"font-size":2.2,fill:"#7c948b","font-family":"Helvetica, Arial"},null,"Print area from your Excel template");
+  const A=lay.area, m=10;
+  const vb=VIEWBASE[S.bank]||(VIEWBASE[S.bank]={x:lay.origin.x,y:lay.origin.y,w:A.w,h:A.h});
+  svg.setAttribute("viewBox",`${-m} ${-m} ${vb.w+2*m} ${vb.h+2*m}`);
+  svg.classList.toggle("guides",S.guides); svg.innerHTML=""; CUR=null;
+  el("rect",{x:-m,y:-m,width:vb.w+2*m,height:vb.h+2*m,fill:"#eef4f1"});
+  CUR=el("g",{transform:`translate(${r1(lay.origin.x-vb.x)} ${r1(lay.origin.y-vb.y)})`});
+  const ga=el("g",{class:"fld area"+(SEL==="area"?" sel":""),"data-f":"area"});
+  el("rect",{x:0,y:0,width:A.w,height:A.h,fill:"transparent",stroke:SEL==="area"?"#c2410c":"#9fb3ab","stroke-width":SEL==="area"?0.4:0.25,"stroke-dasharray":"1.2 0.8"},ga);
+  el("text",{x:0,y:-1.5,"font-size":2.2,fill:SEL==="area"?"#c2410c":"#7c948b","font-family":"Helvetica, Arial"},ga,"Print area (drag to move everything together)");
   const ink="#0b3a8c", T=excelTexts(D,false); const warns=[];
   Object.keys(BOXN).forEach(k=>{
     const b=lay.boxes[k]; const g=el("g",{class:"fld"+(SEL===k?" sel":""),"data-f":k});
@@ -424,7 +429,7 @@ function renderExcel(lay,D){
     if(r.overflow) warns.push(`"${BOXN[k]}" does not fit in its box.`);
     r.lines.forEach(l=>el("text",{x:l.x,y:l.y,"font-size":r.size*PT,"font-family":b.font==="times"?"Constantia, Times New Roman, serif":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink,"text-anchor":r.align==="right"?"end":r.align==="center"?"middle":"start",style:"white-space:pre"},g,l.t));
   });
-  selectedHandles();
+  selectedHandles(); CUR=null;
   $("wordsTxt").textContent=D.words||"-";
   $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm print area`;
   $("layoutBank").textContent=S.bank;
@@ -516,9 +521,9 @@ let drag=null;
 function svgPt(e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
 svg.addEventListener("pointerdown",e=>{
   const hd=e.target.closest(".handle");
-  if(hd&&SEL){const lay=L();const o=lay.mode==="excel"?lay.boxes[SEL]:lay[SEL];drag={f:SEL,resize:hd.dataset.h,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();return;}
-  const g=e.target.closest(".fld");if(!g){if(SEL){SEL=null;render();}return;}const f=g.dataset.f;SEL=f;const lay=L();const o=lay.mode==="excel"?lay.boxes[f]:lay[f];drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
-svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx=+(p.x-drag.start.x).toFixed(1),dy=+(p.y-drag.start.y).toFixed(1);const o=L().mode==="excel"?L().boxes[drag.f]:L()[drag.f];
+  if(hd&&SEL){const lay=L();const o=SEL==="area"?lay.area:(lay.mode==="excel"?lay.boxes[SEL]:lay[SEL]);drag={f:SEL,resize:hd.dataset.h,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();return;}
+  const g=e.target.closest(".fld");if(!g){if(SEL){SEL=null;render();}return;}const f=g.dataset.f;SEL=f;const lay=L();const o=f==="area"?lay.origin:(lay.mode==="excel"?lay.boxes[f]:lay[f]);drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
+svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx=+(p.x-drag.start.x).toFixed(1),dy=+(p.y-drag.start.y).toFixed(1);const o=drag.f==="area"?(drag.resize?L().area:L().origin):(L().mode==="excel"?L().boxes[drag.f]:L()[drag.f]);
   if(drag.resize){const R=drag.resize, ex=R==="e"||R==="se", sy=R==="s"||R==="se", oo=drag.orig;
     if(o.style==="boxes"){ if(ex)o.pitch=Math.max(2,r1(oo.pitch+dx/8)); if(sy)o.bh=Math.max(2,r1(oo.bh+dy)); syncDateBox(o); }
     else if(L().mode==="excel"){ if(ex)o.w=Math.max(3,r1(oo.w+dx)); if(sy)o.h=Math.max(2,r1(oo.h+dy)); }
@@ -537,6 +542,7 @@ function drawHandles(x,y,w,h,kinds,hs){
 }
 function selectedHandles(){
   const lay=L(); if(!SEL) return;
+  if(lay.mode==="excel"&&SEL==="area"){drawHandles(0,0,lay.area.w,lay.area.h,["e","s","se"],1.6);return;}
   if(lay.mode==="excel"){const b=lay.boxes[SEL]; if(!b) return;
     if(b.style==="boxes") drawHandles(b.x,b.y,8*b.pitch+2*(b.gap||0),b.bh,["e","s","se"],1.6);
     else drawHandles(b.x,b.y,b.w,b.h,["e","s","se"],1.6);
@@ -546,16 +552,17 @@ function selectedHandles(){
 }
 /* ---------- edit the selected field from the preview ---------- */
 let SEL=null;
-const FNAME={date:"Date",payee:"Pay to",words:"Amount in words",words1:"Words line 1",words2:"Words line 2",figures:"Amount (figures)",payeeOnly:"A/C Payee crossing",bearer:"'or bearer' strike-out"};
-function selObj(){const lay=L();if(!SEL)return null;return lay.mode==="excel"?lay.boxes[SEL]:lay[SEL];}
+const FNAME={area:"Print area (everything together)",date:"Date",payee:"Pay to",words:"Amount in words",words1:"Words line 1",words2:"Words line 2",figures:"Amount (figures)",payeeOnly:"A/C Payee crossing",bearer:"'or bearer' strike-out"};
+function selObj(){const lay=L();if(!SEL)return null;if(SEL==="area")return lay.mode==="excel"?lay.area:null;return lay.mode==="excel"?lay.boxes[SEL]:lay[SEL];}
 
-function nudge(dx,dy){const o=selObj();if(!o)return;const mv=(v,d)=>d?r1(v+d):v;if(SEL==="bearer"){o.x1=mv(o.x1,dx);o.x2=mv(o.x2,dx);o.y=mv(o.y,dy);}else{o.x=mv(o.x,dx);o.y=mv(o.y,dy);}markEdited();buildLayoutTable();render();}
+function nudge(dx,dy){let o=selObj();if(!o)return;if(SEL==="area")o=L().origin;const mv=(v,d)=>d?r1(v+d):v;if(SEL==="bearer"){o.x1=mv(o.x1,dx);o.x2=mv(o.x2,dx);o.y=mv(o.y,dy);}else{o.x=mv(o.x,dx);o.y=mv(o.y,dy);}markEdited();buildLayoutTable();render();}
 function resize(d){const lay=L(),o=selObj();if(!o)return;
   if(lay.mode!=="excel"&&(SEL==="words1"||SEL==="words2")){lay.wordsSize=Math.max(5,r1(lay.wordsSize+d));}
   else if(o.size!=null){o.size=Math.max(5,r1(o.size+d));} else return;
   markEdited();buildLayoutTable();render();}
 function widen(d){const lay=L(),o=selObj();if(!o)return;
-  if(lay.mode==="excel"&&o.style==="boxes"){o.pitch=Math.max(2,r1(o.pitch+d/8));syncDateBox(o);}
+  if(SEL==="area"){o.w=Math.max(10,r1(o.w+d));}
+  else if(lay.mode==="excel"&&o.style==="boxes"){o.pitch=Math.max(2,r1(o.pitch+d/8));syncDateBox(o);}
   else if(lay.mode==="excel"){o.w=Math.max(5,r1(o.w+d));}
   else if(o.maxw!=null){o.maxw=Math.max(5,r1(o.maxw+d));}
   else if(SEL==="date"){o.pitch=Math.max(2,r1(o.pitch+d/8));}
@@ -575,6 +582,8 @@ function updateSaveBar(){
   $("selName").textContent=FNAME[SEL]+(size!=null?" · "+size+" pt":"");
   $("btnBold").hidden=lay.mode!=="excel"; $("btnBold").setAttribute("aria-pressed",!!o.bold);
   $("btnShort").hidden=$("btnTall").hidden=lay.mode!=="excel";
+  $("btnSmaller").hidden=$("btnBigger").hidden=SEL==="area";
+  if(SEL==="area"){$("btnBold").hidden=true;$("selName").textContent=FNAME.area+" · "+o.w+" × "+o.h+" mm · at "+lay.origin.x+", "+lay.origin.y+" mm on the page";return;}
   const isBoxes=SEL==="date"&&(o.style==="boxes"||lay.mode!=="excel");
   $("btnNarrow").textContent=isBoxes?"⇤ Smaller boxes":"⇤ Narrower"; $("btnWide").textContent=isBoxes?"Bigger boxes ⇥":"Wider ⇥";
   if(isBoxes&&o.pitch!=null) $("selName").textContent+=" · box "+o.pitch+" mm";
@@ -622,7 +631,7 @@ $("layoutTable").addEventListener("input",e=>{const i=e.target;if(!i.dataset.k)r
 function fillBanks(){const all=[...BANKS,...S.custom].sort((a,b)=>a.localeCompare(b));if(!all.includes(S.bank))all.unshift(S.bank);$("bank").innerHTML=all.map(b=>`<option${b===S.bank?" selected":""}>${b.replace(/</g,"&lt;")}</option>`).join("");}
 $("bank").addEventListener("change",()=>{S.bank=$("bank").value;SEL=null;persist();buildLayoutTable();render();});
 $("btnAddBank").addEventListener("click",()=>{const n=$("newBank").value.trim();if(!n)return;if(!S.custom.includes(n)&&!BANKS.includes(n))S.custom.push(n);S.layouts[n]=S.layouts[n]||clone(L());S.edited=S.edited||{};S.edited[n]=true;S.bank=n;$("newBank").value="";persist();fillBanks();buildLayoutTable();render();});
-$("btnReset").addEventListener("click",()=>{delete S.layouts[S.bank];if(S.edited)delete S.edited[S.bank];delete DRAFT[S.bank];persist();buildLayoutTable();render();say("Layout for "+S.bank+" is back to the bank default.","ok");});
+$("btnReset").addEventListener("click",()=>{delete S.layouts[S.bank];if(S.edited)delete S.edited[S.bank];delete DRAFT[S.bank];delete VIEWBASE[S.bank];persist();buildLayoutTable();render();say("Layout for "+S.bank+" is back to the bank default.","ok");});
 
 /* ---------- settings controls ---------- */
 const binds=[["numbering","value"],["figstyle","value"],["paper","value"],["payeeOnly","checked"],["strikeBearer","checked"],["rupeesPrefix","checked"],["upper","checked"],["showGuides","checked","guides"]];
