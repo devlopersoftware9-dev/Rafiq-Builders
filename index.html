@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <style>
 :root{
-  /* Layout: header strip, then a responsive grid of tool cards. Naya tool = TOOLS list mein ek entry. */
+  /* Layout: header strip, then a responsive grid of tool cards. New tool = one entry in the TOOLS list. */
   --ink:#16243a; --muted:#5b6678; --paper:#f4f6f8; --card:#ffffff; --line:#d7dde5; --accent:#0f5c7a; --accent-soft:#e3f0f5;
   --display:"Fraunces", Georgia, serif; --body:"IBM Plex Sans", "Segoe UI", Arial, sans-serif;
   color-scheme:light;
@@ -45,21 +45,21 @@ footer{max-width:1100px;margin:0 auto;padding:0 24px 28px;color:var(--muted);fon
 <header>
   <div class="brand">Rafiq Builders</div>
   <h1>Tools Dashboard</h1>
-  <p>Kaam ka tool chunein. Har tool ki settings us ke andar save rehti hain.</p>
+  <p>Choose a tool. Each tool keeps its own settings.</p>
 </header>
 <main>
   <div class="grid" id="grid"></div>
 </main>
-<footer>Settings aur register isi browser mein save hote hain.</footer>
+<footer>Settings and registers are saved in this browser.</footer>
 <script>
-// Naya tool add karna ho to yahan ek entry daalein aur us ka folder repo mein bana dein.
+// To add a tool: add an entry here and create its folder in the repo.
 const TOOLS=[
-  {name:"Cheque Printer", href:"cheque-printer/", desc:"Cheque bharein aur print karein: date boxes, Pay to, amount aur words khud ban jate hain.", tags:["25 banks","Print / PDF","Register"],
+  {name:"Cheque Printer", href:"cheque-printer/", desc:"Fill in and print cheques. Date boxes, payee, amount and amount in words are filled automatically.", tags:["25 banks","Print / PDF","Register"],
    icon:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h7M6 14h4M15.5 13.5h3"/></svg>'},
 ];
 const grid=document.getElementById("grid");
-grid.innerHTML=TOOLS.map(t=>`<a class="tool" href="${t.href}"><div class="icon">${t.icon}</div><h2>${t.name}</h2><p>${t.desc}</p><div class="tags">${t.tags.map(g=>`<span class="tag">${g}</span>`).join("")}</div><span class="open">Kholein →</span></a>`).join("")+
- `<div class="tool soon" aria-label="Aur tools jald"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></div><h2>Aur tools jald</h2><p>Naye chhote projects yahan add honge.</p></div>`;
+grid.innerHTML=TOOLS.map(t=>`<a class="tool" href="${t.href}"><div class="icon">${t.icon}</div><h2>${t.name}</h2><p>${t.desc}</p><div class="tags">${t.tags.map(g=>`<span class="tag">${g}</span>`).join("")}</div><span class="open">Open →</span></a>`).join("")+
+ `<div class="tool soon" aria-label="More tools coming soon"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></div><h2>More tools coming soon</h2><p>New tools will appear here.</p></div>`;
 </script>
 </body>
 </html>

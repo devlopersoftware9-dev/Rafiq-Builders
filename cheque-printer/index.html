@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
-  /* Layout: tool page. Left = cheque bharne ka form, right = real-scale cheque preview + layout calibration; register neeche. */
+  /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
   --ink:#16243a; --muted:#5b6678; --paper:#f4f6f8; --card:#ffffff; --line:#d7dde5;
   --accent:#0f5c7a; --accent-ink:#ffffff; --cheque:#eef4f1; --cheque-line:#9fb3ab; --warn:#a35a00; --warn-bg:#fff3e0; --ok:#1d7a46; --bad:#b42318;
   --print:#0b1b33;
@@ -79,13 +79,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 </head>
 <body>
 <header>
-  <a href="../" class="back" aria-label="Dashboard par wapas">← Dashboard</a>
+  <a href="../" class="back" aria-label="Back to dashboard">← Dashboard</a>
   <h1>Cheque Printer</h1>
-  <p>Date, Pay to aur amount bharein. Amount khud words mein badal jayega, PDF cheque ke size par banegi.</p>
+  <p>Enter the date, payee and amount. The amount is converted to words automatically, and the PDF is sized to the cheque.</p>
 </header>
 <main>
   <section class="card stack" aria-label="Cheque details">
-    <h2>Cheque bharein</h2>
+    <h2>Cheque details</h2>
     <label for="bank">Bank
       <select id="bank"></select>
     </label>
@@ -93,25 +93,25 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <label for="date">Date
         <input id="date" type="date">
       </label>
-      <label for="chqno">Cheque # (register ke liye)
+      <label for="chqno">Cheque No. (for the register)
         <input id="chqno" inputmode="numeric" placeholder="e.g. 90712718">
       </label>
     </div>
     <label for="payee">Pay to
-      <input id="payee" placeholder="Naam likhein" maxlength="80">
+      <input id="payee" placeholder="Payee name" maxlength="80">
     </label>
     <label for="amount">Amount (PKR)
       <input id="amount" class="amount" inputmode="decimal" placeholder="0">
     </label>
     <div class="words" id="wordsBox"><b>Amount in words</b><span id="wordsTxt">-</span></div>
     <div class="row2">
-      <label for="numbering">Words ka system
+      <label for="numbering">Number system
         <select id="numbering">
           <option value="intl">Million</option>
           <option value="lakh">Lakh / Crore</option>
         </select>
       </label>
-      <label for="figstyle">Figures ka style
+      <label for="figstyle">Figures style
         <select id="figstyle">
           <option value="plain">335520 (SBP)</option>
           <option value="stars">**335,520/-</option>
@@ -119,22 +119,22 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       </label>
     </div>
     <div class="checks">
-      <label class="check" for="payeeOnly"><input type="checkbox" id="payeeOnly"> A/C Payee Only crossing print karein</label>
-      <label class="check" for="strikeBearer"><input type="checkbox" id="strikeBearer"> "or bearer" par line maarein</label>
-      <label class="check" for="rupeesPrefix"><input type="checkbox" id="rupeesPrefix"> Words se pehle "Rupees" likhein (agar cheque par chhapa na ho)</label>
-      <label class="check" for="upper"><input type="checkbox" id="upper"> Words CAPITAL letters mein</label>
+      <label class="check" for="payeeOnly"><input type="checkbox" id="payeeOnly"> Print "A/C Payee Only" crossing</label>
+      <label class="check" for="strikeBearer"><input type="checkbox" id="strikeBearer"> Strike out "or bearer"</label>
+      <label class="check" for="rupeesPrefix"><input type="checkbox" id="rupeesPrefix"> Add "Rupees" before the words (if not pre-printed on the cheque)</label>
+      <label class="check" for="upper"><input type="checkbox" id="upper"> Amount in words in CAPITALS</label>
     </div>
     <div class="msg warn" id="warn" role="status"></div>
     <div class="btns">
-      <button class="primary" id="btnPdf">Print PDF banayein</button>
-      <button id="btnPrint">Seedha print karein</button>
+      <button class="primary" id="btnPdf">Download PDF</button>
+      <button id="btnPrint">Print now</button>
       <button id="btnTest">Test print (plain paper)</button>
     </div>
     <div class="msg" id="saveMsg" role="status"></div>
     <ol class="steps">
-      <li>PDF kholein aur print mein <b>Actual size / 100%</b> chunein ("Fit to page" band).</li>
-      <li>Pehli dafa plain kaghaz par Test print nikaal kar cheque ke peeche roshni mein milayein.</li>
-      <li>Farq ho to layout mein X/Y theek karein, ya preview mein field ko drag karein.</li>
+      <li>In the print dialog choose <b>Actual size / 100%</b> and turn off "Fit to page".</li>
+      <li>For a new cheque book, print a test page on plain paper and hold it behind a cheque against the light.</li>
+      <li>If anything is off, adjust X/Y in the layout settings or drag the field in the preview.</li>
     </ol>
   </section>
 
@@ -142,18 +142,18 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <section class="card" aria-label="Preview">
       <h2>Preview <span class="pill" id="sizePill"></span></h2>
       <div class="preview-wrap"><svg id="chq" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cheque preview"></svg></div>
-      <p class="hint">Neela text woh hai jo print hoga, baqi cheque ka design sirf andaze ke liye hai. Kisi field ko drag kar ke us ki jagah badal sakte hain, ye har bank ke liye alag save hoti hai.</p>
-      <label class="check" for="showGuides" style="margin-top:8px"><input type="checkbox" id="showGuides"> Field boxes dikhayein</label>
+      <p class="hint">Only the blue text is printed; the cheque artwork is a guide. Drag any field to move it. Positions are saved separately for each bank.</p>
+      <label class="check" for="showGuides" style="margin-top:8px"><input type="checkbox" id="showGuides"> Show field boxes</label>
 
       <details id="layoutDetails">
         <summary>Layout & printer settings: <span id="layoutBank"></span></summary>
         <div class="stack" style="margin-top:12px">
           <div class="row2">
-            <label for="paper">Printer mein kaghaz
+            <label for="paper">Paper in printer
               <select id="paper">
-                <option value="cheque">Sirf cheque (cheque size page)</option>
-                <option value="a4left">A4 par, cheque upar-baayein kone mein</option>
-                <option value="a4center">A4 par, cheque upar-darmiyan</option>
+                <option value="cheque">Cheque only (cheque-size page)</option>
+                <option value="a4left">A4, cheque at top-left</option>
+                <option value="a4center">A4, cheque at top-centre</option>
               </select>
             </label>
             <div class="row2">
@@ -166,14 +166,14 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
             <label for="ch">Cheque height (mm)<input id="ch" type="number" step="0.5" min="60" max="110"></label>
           </div>
           <div class="layout-grid"><table id="layoutTable"></table></div>
-          <p class="hint">X = baayein kinare se, Y = upar kinare se (mm, text ki base line). Date ka X pehle box ka center hai aur "Box gap" har box ka faasla.</p>
+          <p class="hint">X is measured from the left edge and Y from the top edge, in mm, to the text baseline. For the date, X is the centre of the first box and "Box gap" is the distance between boxes.</p>
           <div class="btns">
-            <button id="btnReset">Is bank ka layout standard par reset</button>
-            <button id="btnExport">Layout file save karein</button>
-            <label class="check" for="importFile" style="display:inline-flex"><span style="border:1px solid var(--line);border-radius:7px;padding:8px 12px;cursor:pointer">Layout file load karein</span><input type="file" id="importFile" accept=".json,application/json" style="position:absolute;opacity:0;width:1px"></label>
+            <button id="btnReset">Reset this bank to the standard layout</button>
+            <button id="btnExport">Export layouts</button>
+            <label class="check" for="importFile" style="display:inline-flex"><span style="border:1px solid var(--line);border-radius:7px;padding:8px 12px;cursor:pointer">Import layouts</span><input type="file" id="importFile" accept=".json,application/json" style="position:absolute;opacity:0;width:1px"></label>
           </div>
           <div class="row2">
-            <label for="newBank">Naya bank / cheque book add karein<input id="newBank" placeholder="e.g. HBL Islamic, Branch Gojra"></label>
+            <label for="newBank">Add a bank or cheque book<input id="newBank" placeholder="e.g. HBL Islamic, Gojra branch"></label>
             <div style="align-self:end"><button id="btnAddBank">Add</button></div>
           </div>
         </div>
@@ -184,10 +184,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <h2>Cheque register</h2>
       <div id="regWrap"></div>
       <div class="btns" style="margin-top:10px">
-        <button id="btnAddReg">Ye cheque register mein daalein</button>
-        <button id="btnCsv">Register CSV (Excel) save karein</button>
+        <button id="btnAddReg">Add this cheque to the register</button>
+        <button id="btnCsv">Export register (CSV for Excel)</button>
       </div>
-      <p class="hint">Register aur layouts isi browser mein save hote hain. Doosre computer par istemal ke liye "Layout file save karein" se file nikaal kar wahan load kar lein.</p>
+      <p class="hint">The register and layouts are saved in this browser. To use the same layouts on another computer, export them here and import them there.</p>
     </section>
   </div>
 </main>
@@ -323,10 +323,10 @@ function render(){
   $("sizePill").textContent=`${lay.w} × ${lay.h} mm`;
   $("layoutBank").textContent=S.bank;
   const warns=[];
-  if($("amount").value && !D.a) warns.push("Amount sahi nahi: sirf number likhein, jaise 25000 ya 25000.50");
-  if(D.a && D.a.paisa && S.figstyle==="plain") warns.push("SBP standard mein figures mein decimal nahi hona chahiye. Paisa ho to bank se confirm karein.");
-  if(D.words && !sp.fit) warns.push("Words do lines mein poore nahi aa rahe. Layout mein words line ki width barhayein.");
-  if(D.payee && textW(D.payee,lay.payee.size)>lay.payee.maxw) warns.push("Pay to ka naam line se lamba hai. Font size kam karein ya width barhayein.");
+  if($("amount").value && !D.a) warns.push("Invalid amount. Enter numbers only, for example 25000 or 25000.50.");
+  if(D.a && D.a.paisa && S.figstyle==="plain") warns.push("The SBP standard does not allow decimals in the figures box. Check with your bank before using paisa.");
+  if(D.words && !sp.fit) warns.push("The amount in words does not fit on two lines. Increase the width of the words lines in the layout settings.");
+  if(D.payee && textW(D.payee,lay.payee.size)>lay.payee.maxw) warns.push("The payee name is longer than the line. Reduce the font size or increase the width.");
   const w=$("warn"); w.textContent=warns.join(" "); w.classList.toggle("show",warns.length>0);
 }
 
@@ -341,7 +341,7 @@ svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx
 svg.addEventListener("pointerup",()=>{if(drag){drag=null;persist();buildLayoutTable();}});
 
 /* ---------- layout table ---------- */
-const FIELDS=[["date","Date",["x","y","size","pitch"]],["payee","Pay to",["x","y","size","maxw"]],["words1","Words line 1",["x","y","maxw"]],["words2","Words line 2",["x","y","maxw"]],["figures","Amount (figures)",["x","y","size"]],["payeeOnly","A/C Payee crossing",["x","y","size","angle"]],["bearer","'or bearer' line",["x1","x2","y"]]];
+const FIELDS=[["date","Date",["x","y","size","pitch"]],["payee","Pay to",["x","y","size","maxw"]],["words1","Words line 1",["x","y","maxw"]],["words2","Words line 2",["x","y","maxw"]],["figures","Amount (figures)",["x","y","size"]],["payeeOnly","A/C Payee crossing",["x","y","size","angle"]],["bearer","'or bearer' strike-out",["x1","x2","y"]]];
 const COLN={x:"X",y:"Y",size:"Font pt",pitch:"Box gap",maxw:"Width",angle:"Angle°",x1:"From X",x2:"To X"};
 function buildLayoutTable(){
   const lay=L(); const t=$("layoutTable");
@@ -414,25 +414,25 @@ async function saveFile(filename,data){
 function say(t,cls){const m=$("saveMsg");m.textContent=t;m.className="msg show "+cls;}
 async function savePdf(test){
   const D=data();
-  if(!test){if(!D.a||!D.ddmmyyyy||!D.payee){say("Date, Pay to aur sahi amount teeno bharein.","bad");return;}}
-  if(!window.jspdf){say("PDF library load nahi hui. Internet check kar ke page reload karein.","bad");return;}
+  if(!test){if(!D.a||!D.ddmmyyyy||!D.payee){say("Enter the date, payee and a valid amount.","bad");return;}}
+  if(!window.jspdf){say("The PDF library did not load. Check your internet connection and reload the page.","bad");return;}
   const doc=makePdf(test);
   const name=test?`Cheque-TEST-${S.bank}.pdf`:`Cheque-${$("chqno").value||D.ddmmyyyy}-${D.payee}.pdf`;
   try{await saveFile(name.replace(/[\\/:*?"<>|]/g,"-"),doc.output("blob"));
-    say(test?"Test PDF save ho gayi. Plain kaghaz par Actual size (100%) print karein.":"PDF save ho gayi. Actual size (100%) par print karein. Cheque register mein bhi daal diya.","ok");
+    say(test?"Test PDF saved. Print it on plain paper at Actual size (100%).":"PDF saved. Print it at Actual size (100%). The cheque has been added to the register.","ok");
     if(!test) addReg();}
-  catch(e){say(e&&e.code==="declined"?"Save cancel ho gaya.":"File save nahi hui ("+(e&&e.code||"error")+"). Dobara try karein.","bad");}
+  catch(e){say(e&&e.code==="declined"?"Save cancelled.":"The file was not saved ("+(e&&e.code||"error")+"). Please try again.","bad");}
 }
 $("btnPdf").addEventListener("click",()=>savePdf(false));
 $("btnTest").addEventListener("click",()=>savePdf(true));
 $("btnPrint").addEventListener("click",()=>{
   const D=data();
-  if(!D.a||!D.ddmmyyyy||!D.payee){say("Date, Pay to aur sahi amount teeno bharein.","bad");return;}
-  if(!window.jspdf){say("PDF library load nahi hui. Internet check kar ke page reload karein.","bad");return;}
+  if(!D.a||!D.ddmmyyyy||!D.payee){say("Enter the date, payee and a valid amount.","bad");return;}
+  if(!window.jspdf){say("The PDF library did not load. Check your internet connection and reload the page.","bad");return;}
   const doc=makePdf(false); doc.autoPrint();
   const w=window.open(doc.output("bloburl"),"_blank");
-  if(!w){say("Browser ne nayi window block kar di. Pop-ups allow karein ya 'Print PDF banayein' use karein.","bad");return;}
-  addReg(); say("Print window khul gayi. Scale 'Actual size / 100%' rakhein. Cheque register mein daal diya.","ok");
+  if(!w){say("The browser blocked the print window. Allow pop-ups for this site or use 'Download PDF'.","bad");return;}
+  addReg(); say("Print window opened. Keep the scale at 'Actual size / 100%'. The cheque has been added to the register.","ok");
 });
 
 /* ---------- register ---------- */
@@ -440,26 +440,26 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 function addReg(){const D=data();if(!D.a||!D.payee)return;S.register.unshift({ts:new Date().toISOString(),date:$("date").value,bank:S.bank,no:$("chqno").value.trim(),payee:D.payee,amount:D.a.rs+D.a.paisa/100,words:D.words});persist();renderReg();}
 function renderReg(){
   const w=$("regWrap");
-  if(!S.register.length){w.innerHTML='<p class="reg-empty">Abhi koi cheque register mein nahi. PDF banate hi cheque yahan aa jayega.</p>';return;}
+  if(!S.register.length){w.innerHTML='<p class="reg-empty">No cheques in the register yet. Each printed cheque is added here.</p>';return;}
   const tot=S.register.reduce((s,r)=>s+r.amount,0);
   w.innerHTML=`<div class="layout-grid"><table><thead><tr><th>Date</th><th>Bank</th><th>Cheque #</th><th>Pay to</th><th class="num">Amount</th><th></th></tr></thead><tbody>`+
     S.register.map((r,i)=>`<tr><td>${esc(r.date.split("-").reverse().join("-"))}</td><td>${esc(r.bank)}</td><td>${esc(r.no||"-")}</td><td>${esc(r.payee)}</td><td class="num">${r.amount.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:2})}</td><td><button data-del="${i}" aria-label="Delete row" style="padding:3px 8px">✕</button></td></tr>`).join("")+
     `</tbody><tfoot><tr><th colspan="4">Total (${S.register.length} cheques)</th><th class="num">${tot.toLocaleString("en-US",{maximumFractionDigits:2})}</th><th></th></tr></tfoot></table></div>`;
 }
 $("regWrap").addEventListener("click",e=>{const b=e.target.closest("[data-del]");if(!b)return;S.register.splice(+b.dataset.del,1);persist();renderReg();});
-$("btnAddReg").addEventListener("click",()=>{const D=data();if(!D.a||!D.payee){say("Pehle Pay to aur amount bharein.","bad");return;}addReg();say("Register mein daal diya.","ok");});
+$("btnAddReg").addEventListener("click",()=>{const D=data();if(!D.a||!D.payee){say("Enter the payee and amount first.","bad");return;}addReg();say("Added to the register.","ok");});
 $("btnCsv").addEventListener("click",async()=>{
-  if(!S.register.length){say("Register khaali hai.","bad");return;}
+  if(!S.register.length){say("The register is empty.","bad");return;}
   const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
   const csv="﻿Date,Bank,Cheque No,Pay To,Amount,Amount in Words,Entered At\n"+S.register.map(r=>[r.date.split("-").reverse().join("-"),r.bank,r.no,r.payee,r.amount,r.words,r.ts].map(q).join(",")).join("\n");
-  try{await saveFile("Cheque-Register.csv",csv);say("Register CSV save ho gaya, Excel mein khul jayega.","ok");}catch(e){say(e&&e.code==="declined"?"Save cancel ho gaya.":"File save nahi hui.","bad");}
+  try{await saveFile("Cheque-Register.csv",csv);say("Register saved as CSV. It opens in Excel.","ok");}catch(e){say(e&&e.code==="declined"?"Save cancelled.":"The file was not saved.","bad");}
 });
 
 /* ---------- layout export / import ---------- */
 $("btnExport").addEventListener("click",async()=>{
-  try{await saveFile("cheque-layouts.json",JSON.stringify({layouts:S.layouts,custom:S.custom,offX:S.offX,offY:S.offY,paper:S.paper},null,1));say("Layout file save ho gayi.","ok");}catch(e){say("Save nahi hui.","bad");}
+  try{await saveFile("cheque-layouts.json",JSON.stringify({layouts:S.layouts,custom:S.custom,offX:S.offX,offY:S.offY,paper:S.paper},null,1));say("Layouts exported.","ok");}catch(e){say("The file was not saved.","bad");}
 });
-$("importFile").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(!j.layouts)throw 0;Object.assign(S.layouts,j.layouts);S.custom=[...new Set([...(S.custom||[]),...(j.custom||[])])];["offX","offY","paper"].forEach(k=>{if(j[k]!=null)S[k]=j[k];});persist();fillBanks();buildLayoutTable();$("offX").value=S.offX;$("offY").value=S.offY;$("paper").value=S.paper;render();say("Layout load ho gaya.","ok");}catch(err){say("Ye sahi layout file nahi hai.","bad");}e.target.value="";});
+$("importFile").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(!j.layouts)throw 0;Object.assign(S.layouts,j.layouts);S.custom=[...new Set([...(S.custom||[]),...(j.custom||[])])];["offX","offY","paper"].forEach(k=>{if(j[k]!=null)S[k]=j[k];});persist();fillBanks();buildLayoutTable();$("offX").value=S.offX;$("offY").value=S.offY;$("paper").value=S.paper;render();say("Layouts imported.","ok");}catch(err){say("This is not a valid layout file.","bad");}e.target.value="";});
 
 fillBanks(); buildLayoutTable(); render(); renderReg();
 })();
