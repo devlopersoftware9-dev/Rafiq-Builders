@@ -38,6 +38,16 @@ When a bank is selected its saved layout loads automatically; no adjustment is n
 To add a bank, measure its cheque (or a straight scan of it) and add an entry to `banks.js`.
 Banks without an entry use the SBP standard default and show "Layout not set up yet".
 
+### Setting up a new bank (simple)
+Under the preview there are three options:
+1. **Set up from a cheque photo**: drop a scan or a photo (taken from straight above) of a blank cheque.
+   The tool finds the cheque corners, straightens it, and reads the 8 date boxes, the Pay line,
+   the amount-in-words lines and the amount box (`cheque-reader.js`, plain JavaScript, runs in the browser).
+   Enter the cheque size from a ruler, check what was found, then click *Use this layout*.
+2. **Same layout as another bank**: copy a bank's saved layout in one click.
+3. **Whole print a little off?**: after a test print, move everything together in 1 mm steps.
+Then click **Save layout**. Field-by-field editing is under *Advanced*.
+
 ### First-time calibration (once per bank / cheque book)
 1. Click **Test print (plain paper)** and print it on plain A4 at 100%.
 2. Hold the printout behind a blank cheque against the light and check where the text falls.
