@@ -318,7 +318,7 @@ function isDirty(b){b=b||S.bank;return !!DRAFT[b]&&JSON.stringify(DRAFT[b])!==JS
 // Layouts the user has not saved always follow the bank preset.
 function syncPresets(){Object.keys(S.layouts).forEach(b=>{if(!S.edited||!S.edited[b])delete S.layouts[b];});}
 function markEdited(){updateSaveBar();}
-function saveLayout(){const b=S.bank;S.layouts[b]=clone(L());S.edited=S.edited||{};S.edited[b]=true;persist();updateSaveBar();render();say("Layout saved for "+b+".","ok");}
+function saveLayout(){const b=S.bank;S.layouts[b]=clone(L());delete VIEWBASE[b];S.edited=S.edited||{};S.edited[b]=true;persist();updateSaveBar();render();say("Layout saved for "+b+".","ok");}
 function discardLayout(){delete DRAFT[S.bank];delete VIEWBASE[S.bank];buildLayoutTable();render();say("Changes discarded.","ok");}
 function layoutStatus(){
   if(isDirty()) return {cls:"todo",text:"Unsaved changes"};
@@ -449,6 +449,12 @@ function renderExcel(lay,D){
     r.lines.forEach(l=>el("text",{x:l.x,y:l.y,"font-size":r.size*PT,"font-family":b.font==="times"?"Constantia, Times New Roman, serif":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink,"text-anchor":r.align==="right"?"end":r.align==="center"?"middle":"start",style:"white-space:pre"},g,l.t));
   });
   drawRowGuide(lay); drawGuides(); selectedHandles(); CUR=null;
+  // Grow the preview frame so a moved or enlarged print area / field is never cut off.
+  const sx=lay.origin.x-vb.x, sy=lay.origin.y-vb.y; const rs=[{x:0,y:0,w:A.w,h:A.h}];
+  Object.keys(lay.boxes).forEach(k=>{const q=lay.boxes[k];if(q.style==="boxes"){(dateRects(lay)||[]).forEach(r=>rs.push({x:r.x,y:r.y-3,w:r.w+12,h:r.h+8}));}else rs.push(q);});
+  let x1=0,y1=0,x2=vb.w,y2=vb.h; rs.forEach(r=>{x1=Math.min(x1,r.x+sx);y1=Math.min(y1,r.y+sy-3);x2=Math.max(x2,r.x+r.w+sx);y2=Math.max(y2,r.y+r.h+sy);});
+  svg.setAttribute("viewBox",`${x1-m} ${y1-m} ${x2-x1+2*m} ${y2-y1+2*m}`);
+  svg.firstChild.setAttribute("x",x1-m);svg.firstChild.setAttribute("y",y1-m);svg.firstChild.setAttribute("width",x2-x1+2*m);svg.firstChild.setAttribute("height",y2-y1+2*m);
   $("wordsTxt").textContent=D.words||"-";
   $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm print area`;
   $("layoutBank").textContent=S.bank;
