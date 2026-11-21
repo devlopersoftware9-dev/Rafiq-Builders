@@ -91,6 +91,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .savebar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
 .save-state{font-size:12.5px;color:var(--muted)}
 .save-state.dirty{color:var(--warn);font-weight:600}
+.handle{fill:#c2410c;stroke:#fff;stroke-width:0.25}
+.h-e{cursor:ew-resize}.h-s{cursor:ns-resize}.h-se{cursor:nwse-resize}
 .fld.sel .hl{opacity:1;stroke:#c2410c;fill:rgba(194,65,12,.10)}
 .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--paper);border:1px solid var(--line);color:var(--muted)}
 .right{display:grid;gap:16px}
@@ -178,6 +180,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
             <button type="button" id="btnBold" title="Bold" aria-pressed="false"><b>B</b></button>
             <button type="button" id="btnNarrow" title="Narrower">⇤ Narrower</button>
             <button type="button" id="btnWide" title="Wider">Wider ⇥</button>
+            <button type="button" id="btnShort" title="Shorter">Shorter</button>
+            <button type="button" id="btnTall" title="Taller">Taller</button>
             <span class="pad">
               <button type="button" data-nudge="-0.5,0" aria-label="Move left">←</button>
               <button type="button" data-nudge="0,-0.5" aria-label="Move up">↑</button>
@@ -194,7 +198,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
           </span>
         </div>
       </div>
-      <p class="hint">Only the blue text is printed. Click a field to select it, then drag it, use the arrow buttons (or the keyboard arrow keys, hold Shift for bigger steps) and change the font size. Each arrow moves 0.5 mm. Click Save layout to keep the setting for this bank.</p>
+      <p class="hint">Only the blue text is printed. Click a field to select it. Drag the field to move it, or drag the orange handles on its edges to make it narrower, wider, shorter or taller. You can also use the arrow buttons (or the keyboard arrow keys, hold Shift for bigger steps) and change the font size. Each arrow moves 0.5 mm. Click Save layout to keep the setting for this bank.</p>
       <label class="check" for="showGuides" style="margin-top:8px"><input type="checkbox" id="showGuides"> Show field boxes</label>
 
       <details id="layoutDetails">
@@ -420,6 +424,7 @@ function renderExcel(lay,D){
     if(r.overflow) warns.push(`"${BOXN[k]}" does not fit in its box.`);
     r.lines.forEach(l=>el("text",{x:l.x,y:l.y,"font-size":r.size*PT,"font-family":b.font==="times"?"Constantia, Times New Roman, serif":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink,"text-anchor":r.align==="right"?"end":r.align==="center"?"middle":"start",style:"white-space:pre"},g,l.t));
   });
+  selectedHandles();
   $("wordsTxt").textContent=D.words||"-";
   $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm print area`;
   $("layoutBank").textContent=S.bank;
@@ -493,6 +498,7 @@ function render(){
     el("line",{x1:po.x-1.5,y1:po.y+1.3,x2:po.x+tw+1.5,y2:po.y+1.3,stroke:ink,"stroke-width":0.3},inner);}
   if(S.strikeBearer){g=grp("bearer");box(g,lay.bearer.x1,lay.bearer.y-2.5,lay.bearer.x2-lay.bearer.x1,4);el("line",{x1:lay.bearer.x1,y1:lay.bearer.y,x2:lay.bearer.x2,y2:lay.bearer.y,stroke:ink,"stroke-width":0.4},g);}
 
+  selectedHandles();
   $("wordsTxt").textContent=D.words||"-";
   $("sizePill").textContent=`${lay.w} × ${lay.h} mm`;
   $("layoutBank").textContent=S.bank;
@@ -508,12 +514,36 @@ function render(){
 /* ---------- drag to calibrate ---------- */
 let drag=null;
 function svgPt(e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
-svg.addEventListener("pointerdown",e=>{const g=e.target.closest(".fld");if(!g){if(SEL){SEL=null;render();}return;}const f=g.dataset.f;SEL=f;const lay=L();const o=lay.mode==="excel"?lay.boxes[f]:lay[f];drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
+svg.addEventListener("pointerdown",e=>{
+  const hd=e.target.closest(".handle");
+  if(hd&&SEL){const lay=L();const o=lay.mode==="excel"?lay.boxes[SEL]:lay[SEL];drag={f:SEL,resize:hd.dataset.h,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();return;}
+  const g=e.target.closest(".fld");if(!g){if(SEL){SEL=null;render();}return;}const f=g.dataset.f;SEL=f;const lay=L();const o=lay.mode==="excel"?lay.boxes[f]:lay[f];drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
 svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx=+(p.x-drag.start.x).toFixed(1),dy=+(p.y-drag.start.y).toFixed(1);const o=L().mode==="excel"?L().boxes[drag.f]:L()[drag.f];
+  if(drag.resize){const R=drag.resize, ex=R==="e"||R==="se", sy=R==="s"||R==="se", oo=drag.orig;
+    if(o.style==="boxes"){ if(ex)o.pitch=Math.max(2,r1(oo.pitch+dx/8)); if(sy)o.bh=Math.max(2,r1(oo.bh+dy)); syncDateBox(o); }
+    else if(L().mode==="excel"){ if(ex)o.w=Math.max(3,r1(oo.w+dx)); if(sy)o.h=Math.max(2,r1(oo.h+dy)); }
+    else if(o.maxw!=null){ if(ex)o.maxw=Math.max(5,r1(oo.maxw+dx)); }
+    else if(drag.f==="date"){ if(ex)o.pitch=Math.max(2,r1(oo.pitch+dx/8)); }
+    render(); return;}
   if(drag.f==="bearer"){o.x1=+(drag.orig.x1+dx).toFixed(1);o.x2=+(drag.orig.x2+dx).toFixed(1);o.y=+(drag.orig.y+dy).toFixed(1);}
   else{o.x=+(drag.orig.x+dx).toFixed(1);o.y=+(drag.orig.y+dy).toFixed(1);}
   render();});
 svg.addEventListener("pointerup",()=>{if(drag){drag=null;markEdited();buildLayoutTable();render();}});
+/* ---------- resize handles on the selected field ---------- */
+function drawHandles(x,y,w,h,kinds,hs){
+  const g=el("g",{class:"handles"});
+  const pos={e:[x+w,y+h/2],s:[x+w/2,y+h],se:[x+w,y+h]};
+  kinds.forEach(k=>{const [cx,cy]=pos[k];el("rect",{class:"handle h-"+k,"data-h":k,x:cx-hs/2,y:cy-hs/2,width:hs,height:hs,rx:hs*0.2},g);});
+}
+function selectedHandles(){
+  const lay=L(); if(!SEL) return;
+  if(lay.mode==="excel"){const b=lay.boxes[SEL]; if(!b) return;
+    if(b.style==="boxes") drawHandles(b.x,b.y,8*b.pitch+2*(b.gap||0),b.bh,["e","s","se"],1.6);
+    else drawHandles(b.x,b.y,b.w,b.h,["e","s","se"],1.6);
+    return;}
+  const o=lay[SEL]; if(o&&o.maxw!=null) drawHandles(o.x,o.y-4.5,o.maxw,6,["e"],2);
+  else if(SEL==="date") drawHandles(o.x-o.pitch/2,o.y-5,o.pitch*8,6.5,["e"],2);
+}
 /* ---------- edit the selected field from the preview ---------- */
 let SEL=null;
 const FNAME={date:"Date",payee:"Pay to",words:"Amount in words",words1:"Words line 1",words2:"Words line 2",figures:"Amount (figures)",payeeOnly:"A/C Payee crossing",bearer:"'or bearer' strike-out"};
@@ -530,6 +560,9 @@ function widen(d){const lay=L(),o=selObj();if(!o)return;
   else if(o.maxw!=null){o.maxw=Math.max(5,r1(o.maxw+d));}
   else if(SEL==="date"){o.pitch=Math.max(2,r1(o.pitch+d/8));}
   else return; markEdited();buildLayoutTable();render();}
+function taller(d){const lay=L(),o=selObj();if(!o||lay.mode!=="excel")return;
+  if(o.style==="boxes"){o.bh=Math.max(2,r1(o.bh+d));syncDateBox(o);} else o.h=Math.max(2,r1(o.h+d));
+  markEdited();buildLayoutTable();render();}
 function toggleBold(){const o=selObj();if(!o||L().mode!=="excel")return;o.bold=!o.bold;markEdited();render();}
 function updateSaveBar(){
   const dirty=isDirty(); $("btnSaveLayout").disabled=!dirty; $("btnDiscard").disabled=!dirty;
@@ -541,15 +574,19 @@ function updateSaveBar(){
   let size=lay.mode!=="excel"&&(SEL==="words1"||SEL==="words2")?lay.wordsSize:o.size;
   $("selName").textContent=FNAME[SEL]+(size!=null?" · "+size+" pt":"");
   $("btnBold").hidden=lay.mode!=="excel"; $("btnBold").setAttribute("aria-pressed",!!o.bold);
+  $("btnShort").hidden=$("btnTall").hidden=lay.mode!=="excel";
   const isBoxes=SEL==="date"&&(o.style==="boxes"||lay.mode!=="excel");
   $("btnNarrow").textContent=isBoxes?"⇤ Smaller boxes":"⇤ Narrower"; $("btnWide").textContent=isBoxes?"Bigger boxes ⇥":"Wider ⇥";
   if(isBoxes&&o.pitch!=null) $("selName").textContent+=" · box "+o.pitch+" mm";
+  else if(lay.mode==="excel"&&o.w!=null) $("selName").textContent+=" · "+o.w+" × "+o.h+" mm";
 }
 $("btnSmaller").addEventListener("click",()=>resize(-0.5));
 $("btnBigger").addEventListener("click",()=>resize(0.5));
 $("btnNarrow").addEventListener("click",()=>widen(-2));
 $("btnWide").addEventListener("click",()=>widen(2));
 $("btnBold").addEventListener("click",toggleBold);
+$("btnShort").addEventListener("click",()=>taller(-1));
+$("btnTall").addEventListener("click",()=>taller(1));
 document.querySelectorAll("[data-nudge]").forEach(b=>b.addEventListener("click",()=>{const [x,y]=b.dataset.nudge.split(",").map(Number);nudge(x,y);}));
 $("btnSaveLayout").addEventListener("click",saveLayout);
 window.addEventListener("beforeunload",e=>{if(Object.keys(DRAFT).some(b=>isDirty(b))){e.preventDefault();e.returnValue="";}});
