@@ -167,7 +167,10 @@
     let lines = components(hm, W, H, 1).stats.filter(s => s.w > 0.25 * W && s.h < 2.5 * PPM).map(s => ({ x1: mm(s.x), y: mm(s.y + s.h / 2), x2: mm(s.x + s.w) }));
     const inside = (l, bx) => bx && bx.x - 1 <= l.x1 && l.x2 <= bx.x + bx.w + 1 && bx.y - 1 <= l.y && l.y <= bx.y + bx.h + 1;
     lines = lines.filter(l => !inside(l, amount) && l.y > 6 && l.y < Hmm * 0.72);
-    if (date) lines = lines.filter(l => l.y > date[0].y + date[0].h * 0.6 || l.x2 < date[0].x);
+    // The Pay line and the amount-in-words lines start on the left part of the cheque.
+    // Lines that start on the right are box edges (date boxes, cheque number, amount box) or the signature line.
+    lines = lines.filter(l => l.x1 < Wmm * 0.45);
+    if (date) { const bottom = Math.max(...date.map(b => b.y + b.h)); lines = lines.filter(l => l.y > bottom + 2 || l.x2 < date[0].x); }
     lines.sort((a, b) => a.y - b.y);
     const merged = [];
     lines.forEach(l => { const m = merged[merged.length - 1]; if (m && Math.abs(m.y - l.y) < 1.2) { m.x1 = Math.min(m.x1, l.x1); m.x2 = Math.max(m.x2, l.x2); m.y = (m.y + l.y) / 2; } else merged.push(Object.assign({}, l)); });
