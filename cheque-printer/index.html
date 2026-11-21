@@ -53,6 +53,7 @@ button:hover{filter:brightness(1.06)}
 button:disabled{opacity:.5;cursor:not-allowed}
 .msg{font-size:12.5px;border-radius:7px;padding:8px 10px;display:none}
 .msg.show{display:block}
+.msg.note{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
 .msg.warn{background:var(--warn-bg);color:var(--warn)}
 .msg.ok{color:var(--ok);background:transparent;padding:0}
 .msg.bad{color:var(--bad);background:transparent;padding:0}
@@ -108,6 +109,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <input id="amount" class="amount" inputmode="decimal" placeholder="0">
     </label>
     <div class="words" id="wordsBox"><b>Amount in words</b><span id="wordsTxt">-</span></div>
+    <div class="msg note" id="modeNote">This bank uses the layout from your Excel template. Date, amount and words are printed in the same format as Excel, so the format options below do not apply.</div>
     <div class="row2">
       <label for="numbering">Number system
         <select id="numbering">
@@ -232,7 +234,7 @@ function syncPresets(){Object.keys(S.layouts).forEach(b=>{if(!S.edited||!S.edite
 function markEdited(){S.edited=S.edited||{};S.edited[S.bank]=true;}
 function layoutStatus(){
   if(S.edited&&S.edited[S.bank]) return {cls:"edited",text:"Edited on this computer"};
-  if(PRESETS[S.bank]) return {cls:"ready",text:"Saved bank layout"};
+  if(PRESETS[S.bank]) return {cls:"ready",text:PRESETS[S.bank].mode==="excel"?"Saved from Excel template":"Saved bank layout"};
   return {cls:"todo",text:"Layout not set up yet (standard size)"};
 }
 
@@ -260,10 +262,47 @@ function figures(a){
 
 /* ---------- text measuring (same metrics as the PDF) ---------- */
 let measurer=null;
-function textW(str,pt){
-  if(window.jspdf){ if(!measurer){measurer=new window.jspdf.jsPDF({unit:"mm"});measurer.setFont("helvetica","normal");} measurer.setFontSize(pt); return measurer.getTextWidth(str); }
-  const c=textW.c||(textW.c=document.createElement("canvas").getContext("2d")); c.font="100px Helvetica, Arial"; return c.measureText(str).width/100*pt*0.3528;
+function textW(str,pt,font,bold){
+  font=font||"helvetica";
+  if(window.jspdf){ if(!measurer){measurer=new window.jspdf.jsPDF({unit:"mm"});} measurer.setFont(font,bold?"bold":"normal"); measurer.setFontSize(pt); return measurer.getTextWidth(str); }
+  const c=textW.c||(textW.c=document.createElement("canvas").getContext("2d")); c.font=(bold?"bold ":"")+"100px "+(font==="times"?"Times New Roman, serif":"Helvetica, Arial"); return c.measureText(str).width/100*pt*0.3528;
 }
+/* ---------- Excel-template mode: fields are cell boxes, printed the way Excel prints them ---------- */
+function isExcel(){return L().mode==="excel";}
+function excelWords(a){
+  const n=a.rs; if(n===0) return "= Zero Only.";
+  const parts=[]; const cr=Math.floor(n/1e7), lac=Math.floor(n%1e7/1e5), th=Math.floor(n%1e5/1e3), hu=Math.floor(n%1e3/100), un=n%100;
+  if(cr) parts.push((cr<100?under100(cr):lakh(cr))+" Crore");
+  if(lac) parts.push(under100(lac)+" Lac");
+  if(th) parts.push(under100(th)+" Thousand");
+  if(hu) parts.push(ONES[hu]+" Hundred");
+  if(un) parts.push(under100(un));
+  let w=parts.length>1?parts.slice(0,-1).join(", ")+" & "+parts[parts.length-1]:parts[0];
+  if(a.paisa) w+=" and "+under100(a.paisa)+" Paisa";
+  return (L().wordsPrefix||"")+w+" Only.";
+}
+function excelFig(a){return "="+a.rs.toLocaleString("en-IN")+(a.paisa?"."+String(a.paisa).padStart(2,"0"):"")+"/-";}
+// Lay text into a cell box like Excel: padding, horizontal/vertical alignment, wrap and shrink-to-fit.
+function boxLines(b,text){
+  const padX=0.5, padY=0.3; let size=b.size; const avail=b.w-2*padX;
+  if(b.shrink){while(size>5&&textW(text,size,b.font,b.bold)>avail)size-=0.25;}
+  let lines=[text];
+  if(b.wrap){lines=[];let cur="";text.split(" ").forEach(wd=>{const t=cur?cur+" "+wd:wd;if(cur&&textW(t,size,b.font,b.bold)>avail){lines.push(cur);cur=wd;}else cur=t;});if(cur)lines.push(cur);}
+  const em=size*PT, asc=0.905*em, desc=0.212*em, lh=1.2*em, block=lines.length*lh;
+  let top;
+  if(b.v_align==="top") top=b.y+padY;
+  else if(b.v_align==="center") top=b.y+(b.h-block)/2;
+  else top=b.y+b.h-padY-block;
+  const x=b.h_align==="right"?b.x+b.w-padX:b.h_align==="center"?b.x+b.w/2:b.x+padX;
+  const out=lines.map((t,i)=>({t,x,y:top+i*lh+(lh-(asc+desc))/2+asc}));
+  return {lines:out,size,align:b.h_align==="right"?"right":b.h_align==="center"?"center":"left",overflow:lines.length*lh>b.h+0.5||(!b.wrap&&textW(text,size,b.font,b.bold)>avail+0.2)};
+}
+function excelTexts(D,test){
+  const lay=L(); const dt=D.dateText||(test?"01-01-2026":"");
+  return {date:dt,payee:(D.payee||(test?"Sample Payee Name":""))?(lay.payeePrefix||"")+(D.payee||"Sample Payee Name"):"",
+          words:D.words||(test?excelWords({rs:1417500,paisa:0}):""),figures:D.fig||(test?excelFig({rs:1417500,paisa:0}):"")};
+}
+const BOXN={date:"Date",payee:"Pay to",words:"Amount in words",figures:"Amount (figures)"};
 function splitWords(text){
   const lay=L(); let pt=lay.wordsSize;
   for(;pt>=7;pt-=0.5){
@@ -281,6 +320,7 @@ function data(){
   const a=parseAmount($("amount").value);
   const d=$("date").value;
   const ddmmyyyy=d?d.slice(8,10)+d.slice(5,7)+d.slice(0,4):"";
+  if(isExcel()) return {a,ddmmyyyy,dateText:d?d.slice(8,10)+"-"+d.slice(5,7)+"-"+d.slice(0,4):"",payee:$("payee").value.trim(),words:a?excelWords(a):"",fig:a?excelFig(a):""};
   return {a,ddmmyyyy,payee:$("payee").value.trim(),words:a?toWords(a):"",fig:a?figures(a):""};
 }
 
@@ -288,7 +328,39 @@ function data(){
 const svg=$("chq"); const NS="http://www.w3.org/2000/svg";
 const PT=0.3528;
 function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;(parent||svg).appendChild(e);return e;}
+function renderExcel(lay,D){
+  const A=lay.area, m=6;
+  svg.setAttribute("viewBox",`${-m} ${-m} ${A.w+2*m} ${A.h+2*m}`);
+  svg.classList.toggle("guides",S.guides); svg.innerHTML="";
+  el("rect",{x:-m,y:-m,width:A.w+2*m,height:A.h+2*m,fill:"#eef4f1"});
+  el("rect",{x:0,y:0,width:A.w,height:A.h,fill:"none",stroke:"#9fb3ab","stroke-width":0.25,"stroke-dasharray":"1.2 0.8"});
+  el("text",{x:0,y:-1.5,"font-size":2.2,fill:"#7c948b","font-family":"Helvetica, Arial"},null,"Print area from your Excel template");
+  const ink="#0b3a8c", T=excelTexts(D,false); const warns=[];
+  Object.keys(BOXN).forEach(k=>{
+    const b=lay.boxes[k]; const g=el("g",{class:"fld","data-f":k});
+    el("rect",{x:b.x,y:b.y,width:b.w,height:b.h,fill:"rgba(15,92,122,.05)",stroke:"#9fb3ab","stroke-width":0.2},g);
+    el("text",{x:b.x+0.4,y:b.y+1.8,"font-size":1.5,fill:"#7c948b","font-family":"Helvetica, Arial"},g,BOXN[k]);
+    el("rect",{class:"hl",x:b.x,y:b.y,width:b.w,height:b.h,fill:"rgba(15,92,122,.08)",stroke:"#0f5c7a","stroke-width":0.25,"stroke-dasharray":"1 0.8"},g);
+    if(!T[k]) return;
+    const r=boxLines(b,T[k]);
+    if(r.overflow) warns.push(`"${BOXN[k]}" does not fit in its box.`);
+    r.lines.forEach(l=>el("text",{x:l.x,y:l.y,"font-size":r.size*PT,"font-family":b.font==="times"?"Constantia, Times New Roman, serif":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink,"text-anchor":r.align==="right"?"end":r.align==="center"?"middle":"start",style:"white-space:pre"},g,l.t));
+  });
+  $("wordsTxt").textContent=D.words||"-";
+  $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm print area`;
+  $("layoutBank").textContent=S.bank;
+  const st=layoutStatus(); const stp=$("statusPill"); stp.textContent=st.text; stp.className="pill st-"+st.cls;
+  if($("amount").value && !D.a) warns.unshift("Invalid amount. Enter numbers only, for example 25000 or 25000.50.");
+  const w=$("warn"); w.textContent=warns.join(" "); w.classList.toggle("show",warns.length>0);
+}
+function applyModeUI(){
+  const ex=isExcel();
+  ["numbering","figstyle","payeeOnly","strikeBearer","rupeesPrefix","upper","paper","cw","ch","photoFile","showPhoto","btnPhotoDel"].forEach(id=>{$(id).disabled=ex;});
+  $("modeNote").classList.toggle("show",ex);
+}
 function render(){
+  applyModeUI();
+  if(isExcel()) return renderExcel(L(),data());
   const lay=L(), D=data();
   svg.setAttribute("viewBox",`0 0 ${lay.w} ${lay.h}`);
   svg.classList.toggle("guides",S.guides);
@@ -362,8 +434,8 @@ function render(){
 /* ---------- drag to calibrate ---------- */
 let drag=null;
 function svgPt(e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
-svg.addEventListener("pointerdown",e=>{const g=e.target.closest(".fld");if(!g)return;const f=g.dataset.f;const lay=L();const o=lay[f];drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
-svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx=+(p.x-drag.start.x).toFixed(1),dy=+(p.y-drag.start.y).toFixed(1);const o=L()[drag.f];
+svg.addEventListener("pointerdown",e=>{const g=e.target.closest(".fld");if(!g)return;const f=g.dataset.f;const lay=L();const o=lay.mode==="excel"?lay.boxes[f]:lay[f];drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
+svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx=+(p.x-drag.start.x).toFixed(1),dy=+(p.y-drag.start.y).toFixed(1);const o=L().mode==="excel"?L().boxes[drag.f]:L()[drag.f];
   if(drag.f==="bearer"){o.x1=+(drag.orig.x1+dx).toFixed(1);o.x2=+(drag.orig.x2+dx).toFixed(1);o.y=+(drag.orig.y+dy).toFixed(1);}
   else{o.x=+(drag.orig.x+dx).toFixed(1);o.y=+(drag.orig.y+dy).toFixed(1);}
   render();});
@@ -374,13 +446,22 @@ const FIELDS=[["date","Date",["x","y","size","pitch"]],["payee","Pay to",["x","y
 const COLN={x:"X",y:"Y",size:"Font pt",pitch:"Box gap",maxw:"Width",angle:"Angle°",x1:"From X",x2:"To X"};
 function buildLayoutTable(){
   const lay=L(); const t=$("layoutTable");
+  if(lay.mode==="excel"){
+    const inp=(k,c,v)=>`<label style="display:flex;align-items:center;gap:4px;font-weight:400" for="L-${k}-${c}">${c==="size"?"Font pt":c.toUpperCase()}<input id="L-${k}-${c}" type="number" step="0.5" data-k="${k}" data-c="${c}" value="${v}"></label>`;
+    let h="<thead><tr><th>Field</th><th class='num'>Values (mm)</th></tr></thead><tbody>";
+    h+=`<tr><td>Print area position on page</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">${inp("origin","x",lay.origin.x)}${inp("origin","y",lay.origin.y)}</td></tr>`;
+    Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k];h+=`<tr><td>${BOXN[k]}</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">`+["x","y","w","h","size"].map(c=>inp(k,c,b[c])).join("")+"</td></tr>";});
+    t.innerHTML=h+"</tbody>"; return;
+  }
   let h="<thead><tr><th>Field</th><th class='num'>Values (mm)</th></tr></thead><tbody>";
   FIELDS.forEach(([k,name,keys])=>{h+=`<tr><td>${name}</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">`+keys.map(c=>`<label style="display:flex;align-items:center;gap:4px;font-weight:400" for="L-${k}-${c}">${COLN[c]}<input id="L-${k}-${c}" type="number" step="0.5" data-k="${k}" data-c="${c}" value="${lay[k][c]}"></label>`).join("")+"</td></tr>";});
   h+=`<tr><td>Words font</td><td style="text-align:right"><label style="display:inline-flex;align-items:center;gap:4px;font-weight:400" for="L-wordsSize">Font pt<input id="L-wordsSize" type="number" step="0.5" data-k="wordsSize" value="${lay.wordsSize}"></label></td></tr></tbody>`;
   t.innerHTML=h;
   $("cw").value=lay.w; $("ch").value=lay.h;
 }
-$("layoutTable").addEventListener("input",e=>{const i=e.target;if(!i.dataset.k)return;const v=parseFloat(i.value);if(isNaN(v))return;const lay=L();if(i.dataset.k==="wordsSize")lay.wordsSize=v;else lay[i.dataset.k][i.dataset.c]=v;markEdited();persist();render();});
+$("layoutTable").addEventListener("input",e=>{const i=e.target;if(!i.dataset.k)return;const v=parseFloat(i.value);if(isNaN(v))return;const lay=L();
+  if(lay.mode==="excel"){(i.dataset.k==="origin"?lay.origin:lay.boxes[i.dataset.k])[i.dataset.c]=v;markEdited();persist();render();return;}
+  if(i.dataset.k==="wordsSize")lay.wordsSize=v;else lay[i.dataset.k][i.dataset.c]=v;markEdited();persist();render();});
 ["cw","ch"].forEach(id=>$(id).addEventListener("input",()=>{const v=parseFloat($(id).value);if(isNaN(v)||v<50)return;L()[id==="cw"?"w":"h"]=v;markEdited();persist();render();}));
 
 /* ---------- banks ---------- */
@@ -400,7 +481,22 @@ $("payee").value="Muhammad Ahmad Raza"; $("amount").value="25000";
 /* ---------- PDF ---------- */
 let downloads=null;
 if(window.claude&&window.claude.use){window.claude.use("downloads").then(d=>{downloads=d;}).catch(()=>{});}
+function makePdfExcel(test){
+  const {jsPDF}=window.jspdf; const lay=L(); const D=data();
+  const doc=new jsPDF({unit:"mm",format:[lay.page.w,lay.page.h],orientation:"landscape"});
+  const ox=lay.origin.x+S.offX, oy=lay.origin.y+S.offY;
+  doc.setTextColor(0,0,0);
+  if(test){doc.setLineWidth(0.2);doc.setDrawColor(150);doc.rect(ox,oy,lay.area.w,lay.area.h);
+    Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k];doc.rect(ox+b.x,oy+b.y,b.w,b.h);});
+    doc.setFont("helvetica","normal");doc.setFontSize(6);doc.setTextColor(120);doc.text(`TEST PRINT • ${S.bank} • ${lay.page.paper} landscape • offset ${S.offX}/${S.offY}`,ox,oy+lay.area.h+4);doc.setTextColor(0);}
+  const T=excelTexts(D,test);
+  Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k]; if(!T[k])return; const r=boxLines(b,T[k]);
+    doc.setFont(b.font,b.bold?"bold":"normal"); doc.setFontSize(r.size);
+    r.lines.forEach(l=>doc.text(l.t,ox+l.x,oy+l.y,{align:r.align}));});
+  return doc;
+}
 function makePdf(test){
+  if(isExcel()) return makePdfExcel(test);
   const {jsPDF}=window.jspdf; const lay=L(); const D=data();
   let pw=lay.w,ph=lay.h,ox=S.offX,oy=S.offY;
   if(S.paper!=="cheque"){pw=210;ph=297;if(S.paper==="a4center")ox+= (210-lay.w)/2;}
