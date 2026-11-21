@@ -56,7 +56,12 @@ Under the preview there are three options:
    printer the same way as before.
 2. **Same layout as another bank**: copy a bank's saved layout in one click.
 3. **Whole print a little off?**: after a test print, move everything together in 1 mm steps.
-Then click **Save layout**. To change one field, click its box in the preview: the edit buttons appear right under the preview.
+Then click **Save layout**. To change one field, open the adjust section and click its box in the preview.
+
+### Printing (everyday use)
+Choose a bank, fill in date, Pay to and amount, click **Print now** (Actual size / 100%), and put the cheque
+in the printer as shown under the preview. All layout and format settings are inside
+*"Print not lining up on the cheque? Adjust this bank's layout"*, closed by default.
 
 When you change `banks.js` or `cheque-reader.js`, bump the `?v=` number on their `<script>` tags in
 `cheque-printer/index.html`, so browsers load the new file instead of a cached copy.
