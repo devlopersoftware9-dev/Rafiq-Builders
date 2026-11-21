@@ -274,9 +274,21 @@ try{const raw=localStorage.getItem("chq-printer-v1"); if(raw) S=Object.assign(S,
 function persist(){try{localStorage.setItem("chq-printer-v1",JSON.stringify(S));}catch(e){}}
 const PRESETS=window.BANK_PRESETS||{};
 function presetFor(b){return PRESETS[b]?Object.assign(clone(STD),clone(PRESETS[b])):null;}
+function r1(v){return Math.round(v*10)/10;}
 // Edits go into a draft; "Save layout" makes them permanent for that bank.
 const DRAFT={};
-function savedLayout(b){return (S.edited&&S.edited[b]&&S.layouts[b])?clone(S.layouts[b]):(presetFor(b)||clone(STD));}
+function savedLayout(b){return upgradeDate((S.edited&&S.edited[b]&&S.layouts[b])?clone(S.layouts[b]):(presetFor(b)||clone(STD)));}
+// Excel templates printed the date as one text "21-11-2026". Cheques have 8 boxes (DDMMYYYY),
+// so convert to boxes, keeping the same right edge and baseline the template (or the user) set.
+function upgradeDate(lay){
+  if(lay.mode!=="excel"||!lay.boxes||!lay.boxes.date||lay.boxes.date.style==="boxes") return lay;
+  const b=lay.boxes.date; const old=boxLines(b,"21-11-2026"); const base=old.lines[0].y;
+  const right=b.x+b.w-0.5, pitch=5, bh=6.5, cap=0.716*b.size*PT;
+  lay.boxes.date={style:"boxes",x:r1(right-8*pitch),y:r1(base-bh/2-cap/2),pitch,bh,gap:0,size:b.size,bold:b.bold,font:b.font,w:8*pitch,h:bh};
+  return lay;
+}
+function dateBoxX(b,i){return b.x+i*b.pitch+(i>=2?b.gap||0:0)+(i>=4?b.gap||0:0);}
+function syncDateBox(b){b.w=r1(8*b.pitch+2*(b.gap||0));b.h=b.bh;}
 function L(){ if(!DRAFT[S.bank]) DRAFT[S.bank]=savedLayout(S.bank); return DRAFT[S.bank]; }
 function isDirty(b){b=b||S.bank;return !!DRAFT[b]&&JSON.stringify(DRAFT[b])!==JSON.stringify(savedLayout(b));}
 // Layouts the user has not saved always follow the bank preset.
@@ -351,7 +363,7 @@ function boxLines(b,text){
   return {lines:out,size,align:b.h_align==="right"?"right":b.h_align==="center"?"center":"left",overflow:lines.length*lh>b.h+0.5||(!b.wrap&&textW(text,size,b.font,b.bold)>avail+0.2)};
 }
 function excelTexts(D,test){
-  const lay=L(); const dt=D.dateText||(test?"01-01-2026":"");
+  const lay=L(); const dt=lay.boxes.date.style==="boxes"?(D.ddmmyyyy||(test?"01012026":"")):(D.dateText||(test?"01-01-2026":""));
   return {date:dt,payee:(D.payee||(test?"Sample Payee Name":""))?(lay.payeePrefix||"")+(D.payee||"Sample Payee Name"):"",
           words:D.words||(test?excelWords({rs:1417500,paisa:0}):""),figures:D.fig||(test?excelFig({rs:1417500,paisa:0}):"")};
 }
@@ -394,6 +406,15 @@ function renderExcel(lay,D){
     el("rect",{x:b.x,y:b.y,width:b.w,height:b.h,fill:"rgba(15,92,122,.05)",stroke:"#9fb3ab","stroke-width":0.2},g);
     el("text",{x:b.x+0.4,y:b.y+1.8,"font-size":1.5,fill:"#7c948b","font-family":"Helvetica, Arial"},g,BOXN[k]);
     el("rect",{class:"hl",x:b.x,y:b.y,width:b.w,height:b.h,fill:"rgba(15,92,122,.08)",stroke:"#0f5c7a","stroke-width":0.25,"stroke-dasharray":"1 0.8"},g);
+    if(k==="date"&&b.style==="boxes"){
+      for(let i=0;i<8;i++){const bx=dateBoxX(b,i);
+        el("rect",{x:bx,y:b.y,width:b.pitch,height:b.bh,fill:"#ffffff","fill-opacity":0.5,stroke:"#7f9a90","stroke-width":0.25},g);
+        el("text",{x:bx+b.pitch/2,y:b.y+b.bh+1.6,"font-size":1.4,"text-anchor":"middle",fill:"#7c948b","font-family":"Helvetica, Arial"},g,"DDMMYYYY"[i]);
+        if(T.date[i]) el("text",{x:bx+b.pitch/2,y:b.y+b.bh/2+0.716*b.size*PT/2,"font-size":b.size*PT,"text-anchor":"middle","font-family":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink},g,T.date[i]);}
+      g.querySelectorAll("rect")[0].setAttribute("opacity",0); // hide the generic box background
+      const lbl=g.querySelector("text"); if(lbl&&lbl.textContent==="Date") lbl.remove();
+      return;
+    }
     if(!T[k]) return;
     const r=boxLines(b,T[k]);
     if(r.overflow) warns.push(`"${BOXN[k]}" does not fit in its box.`);
@@ -497,14 +518,15 @@ svg.addEventListener("pointerup",()=>{if(drag){drag=null;markEdited();buildLayou
 let SEL=null;
 const FNAME={date:"Date",payee:"Pay to",words:"Amount in words",words1:"Words line 1",words2:"Words line 2",figures:"Amount (figures)",payeeOnly:"A/C Payee crossing",bearer:"'or bearer' strike-out"};
 function selObj(){const lay=L();if(!SEL)return null;return lay.mode==="excel"?lay.boxes[SEL]:lay[SEL];}
-function r1(v){return Math.round(v*10)/10;}
+
 function nudge(dx,dy){const o=selObj();if(!o)return;const mv=(v,d)=>d?r1(v+d):v;if(SEL==="bearer"){o.x1=mv(o.x1,dx);o.x2=mv(o.x2,dx);o.y=mv(o.y,dy);}else{o.x=mv(o.x,dx);o.y=mv(o.y,dy);}markEdited();buildLayoutTable();render();}
 function resize(d){const lay=L(),o=selObj();if(!o)return;
   if(lay.mode!=="excel"&&(SEL==="words1"||SEL==="words2")){lay.wordsSize=Math.max(5,r1(lay.wordsSize+d));}
   else if(o.size!=null){o.size=Math.max(5,r1(o.size+d));} else return;
   markEdited();buildLayoutTable();render();}
 function widen(d){const lay=L(),o=selObj();if(!o)return;
-  if(lay.mode==="excel"){o.w=Math.max(5,r1(o.w+d));}
+  if(lay.mode==="excel"&&o.style==="boxes"){o.pitch=Math.max(2,r1(o.pitch+d/8));syncDateBox(o);}
+  else if(lay.mode==="excel"){o.w=Math.max(5,r1(o.w+d));}
   else if(o.maxw!=null){o.maxw=Math.max(5,r1(o.maxw+d));}
   else if(SEL==="date"){o.pitch=Math.max(2,r1(o.pitch+d/8));}
   else return; markEdited();buildLayoutTable();render();}
@@ -519,6 +541,9 @@ function updateSaveBar(){
   let size=lay.mode!=="excel"&&(SEL==="words1"||SEL==="words2")?lay.wordsSize:o.size;
   $("selName").textContent=FNAME[SEL]+(size!=null?" · "+size+" pt":"");
   $("btnBold").hidden=lay.mode!=="excel"; $("btnBold").setAttribute("aria-pressed",!!o.bold);
+  const isBoxes=SEL==="date"&&(o.style==="boxes"||lay.mode!=="excel");
+  $("btnNarrow").textContent=isBoxes?"⇤ Smaller boxes":"⇤ Narrower"; $("btnWide").textContent=isBoxes?"Bigger boxes ⇥":"Wider ⇥";
+  if(isBoxes&&o.pitch!=null) $("selName").textContent+=" · box "+o.pitch+" mm";
 }
 $("btnSmaller").addEventListener("click",()=>resize(-0.5));
 $("btnBigger").addEventListener("click",()=>resize(0.5));
@@ -539,10 +564,10 @@ const COLN={x:"X",y:"Y",size:"Font pt",pitch:"Box gap",maxw:"Width",angle:"Angle
 function buildLayoutTable(){
   const lay=L(); const t=$("layoutTable");
   if(lay.mode==="excel"){
-    const inp=(k,c,v)=>`<label style="display:flex;align-items:center;gap:4px;font-weight:400" for="L-${k}-${c}">${c==="size"?"Font pt":c.toUpperCase()}<input id="L-${k}-${c}" type="number" step="0.5" data-k="${k}" data-c="${c}" value="${v}"></label>`;
+    const inp=(k,c,v)=>`<label style="display:flex;align-items:center;gap:4px;font-weight:400" for="L-${k}-${c}">${({size:"Font pt",pitch:"Box width",bh:"Box height",gap:"Gap DD|MM|YYYY"})[c]||c.toUpperCase()}<input id="L-${k}-${c}" type="number" step="0.5" data-k="${k}" data-c="${c}" value="${v}"></label>`;
     let h="<thead><tr><th>Field</th><th class='num'>Values (mm)</th></tr></thead><tbody>";
     h+=`<tr><td>Print area position on page</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">${inp("origin","x",lay.origin.x)}${inp("origin","y",lay.origin.y)}</td></tr>`;
-    Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k];h+=`<tr><td>${BOXN[k]}</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">`+["x","y","w","h","size"].map(c=>inp(k,c,b[c])).join("")+"</td></tr>";});
+    Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k];const cols=(k==="date"&&b.style==="boxes")?["x","y","pitch","bh","gap","size"]:["x","y","w","h","size"];h+=`<tr><td>${k==="date"&&b.style==="boxes"?"Date boxes":BOXN[k]}</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">`+cols.map(c=>inp(k,c,b[c])).join("")+"</td></tr>";});
     t.innerHTML=h+"</tbody>"; return;
   }
   let h="<thead><tr><th>Field</th><th class='num'>Values (mm)</th></tr></thead><tbody>";
@@ -552,7 +577,7 @@ function buildLayoutTable(){
   $("cw").value=lay.w; $("ch").value=lay.h;
 }
 $("layoutTable").addEventListener("input",e=>{const i=e.target;if(!i.dataset.k)return;const v=parseFloat(i.value);if(isNaN(v))return;const lay=L();
-  if(lay.mode==="excel"){(i.dataset.k==="origin"?lay.origin:lay.boxes[i.dataset.k])[i.dataset.c]=v;markEdited();render();return;}
+  if(lay.mode==="excel"){const o=(i.dataset.k==="origin"?lay.origin:lay.boxes[i.dataset.k]);o[i.dataset.c]=v;if(o.style==="boxes")syncDateBox(o);markEdited();render();return;}
   if(i.dataset.k==="wordsSize")lay.wordsSize=v;else lay[i.dataset.k][i.dataset.c]=v;markEdited();render();});
 ["cw","ch"].forEach(id=>$(id).addEventListener("input",()=>{const v=parseFloat($(id).value);if(isNaN(v)||v<50)return;L()[id==="cw"?"w":"h"]=v;markEdited();render();}));
 
@@ -582,7 +607,11 @@ function makePdfExcel(test){
     Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k];doc.rect(ox+b.x,oy+b.y,b.w,b.h);});
     doc.setFont("helvetica","normal");doc.setFontSize(6);doc.setTextColor(120);doc.text(`TEST PRINT • ${S.bank} • ${lay.page.paper} landscape • offset ${S.offX}/${S.offY}`,ox,oy+lay.area.h+4);doc.setTextColor(0);}
   const T=excelTexts(D,test);
-  Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k]; if(!T[k])return; const r=boxLines(b,T[k]);
+  Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k]; if(!T[k])return;
+    if(k==="date"&&b.style==="boxes"){doc.setFont(b.font||"helvetica",b.bold?"bold":"normal");doc.setFontSize(b.size);
+      for(let i=0;i<8;i++){const bx=dateBoxX(b,i); if(test){doc.setDrawColor(150);doc.rect(ox+bx,oy+b.y,b.pitch,b.bh);} if(T.date[i]) doc.text(T.date[i],ox+bx+b.pitch/2,oy+b.y+b.bh/2+0.716*b.size*PT/2,{align:"center"});}
+      return;}
+    const r=boxLines(b,T[k]);
     doc.setFont(b.font,b.bold?"bold":"normal"); doc.setFontSize(r.size);
     r.lines.forEach(l=>doc.text(l.t,ox+l.x,oy+l.y,{align:r.align}));});
   return doc;
