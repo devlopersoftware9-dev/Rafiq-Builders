@@ -32,6 +32,10 @@ Browser-based tool to fill and print bank cheques on a printer. No server or ins
 2. Click **Seedha print karein** (direct print) or **Print PDF banayein** (PDF download).
 3. In the print dialog set scale to **Actual size / 100%**. Turn off "Fit to page".
 
+### One normal cheque view for every bank
+Every bank uses the normal cheque view (the Excel print-area presets in `banks.js` are no longer used).
+Each user sets the boxes once against their own cheque and clicks **Save layout**.
+
 ### SBP standard layout and feeding
 Banks without their own layout use the State Bank standard layout (PSD Circular 1 of 2014): date boxes
 DDMMYYYY top-right, Pay line ending in "or bearer", two Rupees lines, PKR box on the right.

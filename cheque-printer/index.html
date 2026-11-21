@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="banks.js?v=2026112114"></script>
-<script src="cheque-reader.js?v=2026112114"></script>
+<script src="banks.js?v=2026112115"></script>
+<script src="cheque-reader.js?v=2026112115"></script>
 <style>
 :root{
   /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
@@ -425,7 +425,8 @@ function persist(){const v=JSON.stringify(S);
   try{ // free space taken by old cheque photos (no longer shown), then try again
     Object.keys(localStorage).filter(k=>k.startsWith("chq-photo-")).forEach(k=>localStorage.removeItem(k));
     localStorage.setItem("chq-printer-v1",v);return true;}catch(e){return false;}}
-const PRESETS=window.BANK_PRESETS||{};
+// Every bank uses the normal cheque view. The old Excel print-area presets in banks.js are not used.
+const PRESETS=Object.fromEntries(Object.entries(window.BANK_PRESETS||{}).filter(([b,v])=>v.mode!=="excel"));
 function presetFor(b){return PRESETS[b]?Object.assign(clone(STD),clone(PRESETS[b])):null;}
 function r1(v){return Math.round(v*10)/10;}
 function r2(v){return Math.round(v*100)/100;}
@@ -468,7 +469,12 @@ function syncDateBox(b){b.w=r1(8*b.pitch+2*(b.gap||0));b.h=b.bh;}
 function L(){ if(!DRAFT[S.bank]) DRAFT[S.bank]=savedLayout(S.bank); return DRAFT[S.bank]; }
 function isDirty(b){b=b||S.bank;return !!DRAFT[b]&&JSON.stringify(DRAFT[b])!==JSON.stringify(savedLayout(b));}
 // Layouts the user has not saved always follow the bank preset.
-function syncPresets(){Object.keys(S.layouts).forEach(b=>{if(!S.edited||!S.edited[b])delete S.layouts[b];});}
+function syncPresets(){Object.keys(S.layouts).forEach(b=>{
+  // drop layouts not saved by the user, and old Excel print-area layouts (no longer used)
+  if(!S.edited||!S.edited[b]||(S.layouts[b]&&S.layouts[b].mode==="excel")){delete S.layouts[b];if(S.edited)delete S.edited[b];}});
+  // cheque photos are no longer shown; free their space
+  try{Object.keys(localStorage).filter(k=>k.startsWith("chq-photo-")).forEach(k=>localStorage.removeItem(k));}catch(e){}
+  S.showPhoto=false; persist();}
 function markEdited(){updateSaveBar();}
 function saveLayout(){const b=S.bank;S.layouts[b]=clone(L());delete VIEWBASE[b];setTimeout(fillCopyFrom,0);S.edited=S.edited||{};S.edited[b]=true;
   const ok=persist();updateSaveBar();render();
@@ -1171,9 +1177,9 @@ function showResult(r,W,H){
 $("dlgBack").addEventListener("click",()=>{$("dlgStep1").hidden=false;$("dlgStep2").hidden=true;});
 $("dlgCancel").addEventListener("click",()=>$("photoDlg").close());
 $("dlgUse").addEventListener("click",()=>{
-  DRAFT[S.bank]=fieldsToExcelLayout(RES.F,RES.W,RES.H); delete VIEWBASE[S.bank]; SEL=null; LASTVB=null;
+  DRAFT[S.bank]=fieldsToLayout(RES.F,RES.W,RES.H); delete VIEWBASE[S.bank]; SEL=null; LASTVB=null;
   $("photoDlg").close(); $("adjust").open=true; buildLayoutTable(); render();
-  say("Boxes read from the photo. The cheque prints on Letter landscape, in the same place as your Excel cheques. Do a test print on a real cheque, use the arrows if the whole print is off, then click Save layout.","ok");
+  say("Boxes read from the photo. Do a test print on plain paper, check it against the cheque, then click Save layout.","ok");
 });
 const dz=$("dropZone");
 $("chequePhoto").addEventListener("change",e=>{openPhoto(e.target.files[0]);e.target.value="";});
