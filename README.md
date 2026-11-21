@@ -50,13 +50,13 @@ Under the preview there are three options:
    The tool finds the cheque corners, straightens it, and reads the 8 date boxes, the Pay line,
    the amount-in-words lines and the amount box (`cheque-reader.js`, plain JavaScript, runs in the browser).
    Enter the cheque size from a ruler, check what was found, then click *Use this layout*.
-   The result is an Excel-style layout (boxes you can edit under *Advanced*) printed on Letter landscape,
+   The result is an Excel-style layout (boxes you can click and edit in the preview) printed on Letter landscape,
    with the cheque at the same place on the page as the office Excel templates (`FEED_DEFAULT` in
    `index.html`, worked out from the Meezan template and a Meezan cheque photo), so cheques go into the
    printer the same way as before.
 2. **Same layout as another bank**: copy a bank's saved layout in one click.
 3. **Whole print a little off?**: after a test print, move everything together in 1 mm steps.
-Then click **Save layout**. Field-by-field editing is under *Advanced*.
+Then click **Save layout**. To change one field, click its box in the preview: the edit buttons appear right under the preview.
 
 When you change `banks.js` or `cheque-reader.js`, bump the `?v=` number on their `<script>` tags in
 `cheque-printer/index.html`, so browsers load the new file instead of a cached copy.

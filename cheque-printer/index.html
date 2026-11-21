@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="banks.js?v=2026112108"></script>
-<script src="cheque-reader.js?v=2026112108"></script>
+<script src="banks.js?v=2026112109"></script>
+<script src="cheque-reader.js?v=2026112109"></script>
 <style>
 :root{
   /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
@@ -128,6 +128,9 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
 .bankname span{font-size:12.5px;font-weight:500;color:var(--muted)}
 .bankname b{font-size:16px}
 .bankname a{font-size:12.5px;color:var(--accent)}
+.editbar[hidden]{display:none}
+.tapnote{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.tapnote[hidden]{display:none}
 .editbar{display:grid;gap:8px;margin-top:10px}
 .fieldbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px}
 .fieldbar .tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -230,6 +233,31 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
     <section class="card" aria-label="Preview">
       <h2>Preview <span class="pill" id="sizePill"></span> <span class="pill" id="statusPill"></span></h2>
       <div class="preview-wrap"><svg id="chq" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cheque preview"></svg></div>
+      <p class="tapnote" id="tapNote">Click any box in the preview (date, Pay to, amount, words) to change its place or size.</p>
+      <div class="editbar" id="editBar" aria-label="Edit the selected box" hidden>
+        <div class="fieldbar" id="fieldBar">
+            <span class="selname" id="selName">Click a field in the preview to edit it</span>
+            <span class="tools">
+              <button type="button" id="btnSmaller" title="Smaller font">A−</button>
+              <button type="button" id="btnBigger" title="Bigger font">A+</button>
+              <button type="button" id="btnBold" title="Bold" aria-pressed="false"><b>B</b></button>
+              <button type="button" id="btnNarrow" title="Narrower">⇤ Narrower</button>
+              <button type="button" id="btnWide" title="Wider">Wider ⇥</button>
+              <button type="button" id="btnShort" title="Shorter">Shorter</button>
+              <button type="button" id="btnTall" title="Taller">Taller</button>
+              <button type="button" id="btnAllBoxes" hidden>Select all 8 date boxes</button>
+              <button type="button" id="btnOneBox" hidden>Edit one box at a time</button>
+              <span class="pad">
+                <button type="button" data-nudge="-0.5,0" aria-label="Move left">←</button>
+                <button type="button" data-nudge="0,-0.5" aria-label="Move up">↑</button>
+                <button type="button" data-nudge="0,0.5" aria-label="Move down">↓</button>
+                <button type="button" data-nudge="0.5,0" aria-label="Move right">→</button>
+              </span>
+            </span>
+          </div>
+                  <div class="rowstate" id="rowState" role="status"></div>
+        <p class="hint" style="margin:0">Drag the box, or use the arrows (0.5 mm each, Shift + arrow keys for 2 mm). Drag the orange handles to make it narrower, wider, shorter or taller. Clicking one date box moves only that box. Click outside the boxes when you are done, then <b>Save layout</b>.</p>
+      </div>
       <div class="simple">
         <div class="tiles">
           <div class="tile">
@@ -262,34 +290,8 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
             <button type="button" class="primary" id="btnSaveLayout">Save layout</button>
           </span>
         </div>
-        <details id="advanced">
-          <summary>Advanced: adjust fields one by one</summary>
-          <div class="editbar" aria-label="Edit fields">
-        <div class="fieldbar" id="fieldBar">
-          <span class="selname" id="selName">Click a field in the preview to edit it</span>
-          <span class="tools">
-            <button type="button" id="btnSmaller" title="Smaller font">A−</button>
-            <button type="button" id="btnBigger" title="Bigger font">A+</button>
-            <button type="button" id="btnBold" title="Bold" aria-pressed="false"><b>B</b></button>
-            <button type="button" id="btnNarrow" title="Narrower">⇤ Narrower</button>
-            <button type="button" id="btnWide" title="Wider">Wider ⇥</button>
-            <button type="button" id="btnShort" title="Shorter">Shorter</button>
-            <button type="button" id="btnTall" title="Taller">Taller</button>
-            <button type="button" id="btnAllBoxes" hidden>Select all 8 date boxes</button>
-            <button type="button" id="btnOneBox" hidden>Edit one box at a time</button>
-            <span class="pad">
-              <button type="button" data-nudge="-0.5,0" aria-label="Move left">←</button>
-              <button type="button" data-nudge="0,-0.5" aria-label="Move up">↑</button>
-              <button type="button" data-nudge="0,0.5" aria-label="Move down">↓</button>
-              <button type="button" data-nudge="0.5,0" aria-label="Move right">→</button>
-            </span>
-          </span>
-        </div>
-        <div class="rowstate" id="rowState" role="status"></div>
-          </div>
-      <p class="hint">Only the blue text is printed. Click a field to select it. Clicking a date box selects only that box; use "Select all 8 date boxes" to move them together. Drag the field to move it, or drag the orange handles on its edges to make it narrower, wider, shorter or taller. You can also use the arrow buttons (or the keyboard arrow keys, hold Shift for bigger steps) and change the font size. Each arrow moves 0.5 mm. Click Save layout to keep the setting for this bank.</p>
-      <label class="check" for="showGuides" style="margin-top:8px"><input type="checkbox" id="showGuides"> Show field boxes</label>
-        </details>
+        <label class="check" for="showGuides" style="font-size:12.5px"><input type="checkbox" id="showGuides"> Show field boxes</label>
+
       </div>
 
       <details id="layoutDetails">
@@ -664,7 +666,6 @@ function render(){
 let drag=null;
 function svgPt(e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
 svg.addEventListener("pointerdown",e=>{
-  if(!$("advanced").open) return;
   const hd=e.target.closest(".handle");
   if(hd&&SEL){const lay=L();const o=fieldObj(SEL,lay);drag={f:SEL,resize:hd.dataset.h,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();return;}
   const g=e.target.closest(".fld");if(!g){if(SEL){SEL=null;render();}return;}const db=e.target.closest("[data-box]");const f=(db&&g.dataset.f==="date"&&!e.shiftKey&&!(SEL==="date"))?"date:"+db.dataset.box:g.dataset.f;SEL=f;const lay=L();const o=f==="area"?lay.origin:fieldObj(f,lay);drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
@@ -770,7 +771,8 @@ function updateSaveBar(){
   $("saveState").textContent=dirty?"You have unsaved changes for "+S.bank+".":"Layout for "+S.bank+" is saved.";
   $("saveState").className="save-state"+(dirty?" dirty":"");
   const lay=L(), o=selObj(); const bar=$("fieldBar");
-  if(!o){bar.classList.remove("on");$("selName").textContent="Click a field in the preview to edit it";return;}
+  $("editBar").hidden=!o; $("tapNote").hidden=!!o;
+  if(!o){bar.classList.remove("on");return;}
   bar.classList.add("on");
   let size=lay.mode!=="excel"&&(SEL==="words1"||SEL==="words2")?lay.wordsSize:o.size;
   $("selName").textContent=FNAME[SEL]+(size!=null?" · "+size+" pt":"");
@@ -802,7 +804,7 @@ document.querySelectorAll("[data-nudge]").forEach(b=>b.addEventListener("click",
 $("btnSaveLayout").addEventListener("click",saveLayout);
 window.addEventListener("beforeunload",e=>{if(Object.keys(DRAFT).some(b=>isDirty(b))){e.preventDefault();e.returnValue="";}});
 $("btnDiscard").addEventListener("click",discardLayout);
-document.addEventListener("keydown",e=>{if(!SEL||!$("advanced").open)return;const t=e.target.tagName;if(t==="INPUT"||t==="SELECT"||t==="TEXTAREA")return;
+document.addEventListener("keydown",e=>{if(!SEL)return;const t=e.target.tagName;if(t==="INPUT"||t==="SELECT"||t==="TEXTAREA")return;
   const st=e.shiftKey?2:0.5;const m={ArrowLeft:[-st,0],ArrowRight:[st,0],ArrowUp:[0,-st],ArrowDown:[0,st]}[e.key];
   if(m){e.preventDefault();nudge(m[0],m[1]);} else if(e.key==="Escape"){SEL=null;render();}});
 
@@ -1120,7 +1122,7 @@ $("dlgBack").addEventListener("click",()=>{$("dlgStep1").hidden=false;$("dlgStep
 $("dlgCancel").addEventListener("click",()=>$("photoDlg").close());
 $("dlgUse").addEventListener("click",()=>{
   DRAFT[S.bank]=fieldsToExcelLayout(RES.F,RES.W,RES.H); delete VIEWBASE[S.bank]; SEL=null; LASTVB=null;
-  $("photoDlg").close(); $("advanced").open=true; buildLayoutTable(); render();
+  $("photoDlg").close(); buildLayoutTable(); render();
   say("Boxes read from the photo. The cheque prints on Letter landscape, in the same place as your Excel cheques. Do a test print on a real cheque, use the arrows if the whole print is off, then click Save layout.","ok");
 });
 const dz=$("dropZone");
