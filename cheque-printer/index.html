@@ -93,6 +93,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .save-state.dirty{color:var(--warn);font-weight:600}
 .handle{fill:#c2410c;stroke:#fff;stroke-width:0.25}
 .h-e{cursor:ew-resize}.h-s{cursor:ns-resize}.h-se{cursor:nwse-resize}
+.sel-box .boxbg{stroke:#c2410c!important;stroke-width:0.6!important;fill:rgba(194,65,12,.12)!important;fill-opacity:1!important}
 .fld.sel .hl{opacity:1;stroke:#c2410c;fill:rgba(194,65,12,.10)}
 .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--paper);border:1px solid var(--line);color:var(--muted)}
 .right{display:grid;gap:16px}
@@ -182,6 +183,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
             <button type="button" id="btnWide" title="Wider">Wider ⇥</button>
             <button type="button" id="btnShort" title="Shorter">Shorter</button>
             <button type="button" id="btnTall" title="Taller">Taller</button>
+            <button type="button" id="btnAllBoxes" hidden>Select all 8 date boxes</button>
+            <button type="button" id="btnOneBox" hidden>Edit one box at a time</button>
             <span class="pad">
               <button type="button" data-nudge="-0.5,0" aria-label="Move left">←</button>
               <button type="button" data-nudge="0,-0.5" aria-label="Move up">↑</button>
@@ -198,7 +201,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
           </span>
         </div>
       </div>
-      <p class="hint">Only the blue text is printed. Click a field to select it. Drag the field to move it, or drag the orange handles on its edges to make it narrower, wider, shorter or taller. You can also use the arrow buttons (or the keyboard arrow keys, hold Shift for bigger steps) and change the font size. Each arrow moves 0.5 mm. Click Save layout to keep the setting for this bank.</p>
+      <p class="hint">Only the blue text is printed. Click a field to select it. Clicking a date box selects only that box; use "Select all 8 date boxes" to move them together. Drag the field to move it, or drag the orange handles on its edges to make it narrower, wider, shorter or taller. You can also use the arrow buttons (or the keyboard arrow keys, hold Shift for bigger steps) and change the font size. Each arrow moves 0.5 mm. Click Save layout to keep the setting for this bank.</p>
       <label class="check" for="showGuides" style="margin-top:8px"><input type="checkbox" id="showGuides"> Show field boxes</label>
 
       <details id="layoutDetails">
@@ -282,7 +285,9 @@ function r1(v){return Math.round(v*10)/10;}
 const VIEWBASE={};
 // Edits go into a draft; "Save layout" makes them permanent for that bank.
 const DRAFT={};
-function savedLayout(b){return upgradeDate((S.edited&&S.edited[b]&&S.layouts[b])?clone(S.layouts[b]):(presetFor(b)||clone(STD)));}
+function savedLayout(b){const lay=upgradeDate((S.edited&&S.edited[b]&&S.layouts[b])?clone(S.layouts[b]):(presetFor(b)||clone(STD)));
+  if(lay.mode==="excel"){if(lay.boxes.date.style==="boxes")offs(lay.boxes.date);} else offs(lay.date);
+  return lay;}
 // Excel templates printed the date as one text "21-11-2026". Cheques have 8 boxes (DDMMYYYY),
 // so convert to boxes, keeping the same right edge and baseline the template (or the user) set.
 function upgradeDate(lay){
@@ -292,7 +297,17 @@ function upgradeDate(lay){
   lay.boxes.date={style:"boxes",x:r1(right-8*pitch),y:r1(base-bh/2-cap/2),pitch,bh,gap:0,size:b.size,bold:b.bold,font:b.font,w:8*pitch,h:bh};
   return lay;
 }
-function dateBoxX(b,i){return b.x+i*b.pitch+(i>=2?b.gap||0:0)+(i>=4?b.gap||0:0);}
+// Each of the 8 date boxes can also be shifted on its own (offs[i]), because cheques space them differently.
+function offs(o){if(!o.offs||o.offs.length!==8)o.offs=Array.from({length:8},()=>({x:0,y:0}));return o.offs;}
+function dateBoxX(b,i){return b.x+i*b.pitch+(i>=2?b.gap||0:0)+(i>=4?b.gap||0:0)+offs(b)[i].x;}
+function dateBoxY(b,i){return b.y+offs(b)[i].y;}
+function stdDateX(d,i){return d.x+i*d.pitch+offs(d)[i].x;}
+function stdDateY(d,i){return d.y+offs(d)[i].y;}
+function boxIndex(f){return /^date:\d$/.test(f||"")?+f.slice(5):-1;}
+function fieldObj(f,lay){lay=lay||L();const bi=boxIndex(f);
+  if(bi>=0) return offs(lay.mode==="excel"?lay.boxes.date:lay.date)[bi];
+  if(f==="area") return lay.mode==="excel"?lay.area:null;
+  return lay.mode==="excel"?lay.boxes[f]:lay[f];}
 function syncDateBox(b){b.w=r1(8*b.pitch+2*(b.gap||0));b.h=b.bh;}
 function L(){ if(!DRAFT[S.bank]) DRAFT[S.bank]=savedLayout(S.bank); return DRAFT[S.bank]; }
 function isDirty(b){b=b||S.bank;return !!DRAFT[b]&&JSON.stringify(DRAFT[b])!==JSON.stringify(savedLayout(b));}
@@ -416,10 +431,10 @@ function renderExcel(lay,D){
     el("text",{x:b.x+0.4,y:b.y+1.8,"font-size":1.5,fill:"#7c948b","font-family":"Helvetica, Arial"},g,BOXN[k]);
     el("rect",{class:"hl",x:b.x,y:b.y,width:b.w,height:b.h,fill:"rgba(15,92,122,.08)",stroke:"#0f5c7a","stroke-width":0.25,"stroke-dasharray":"1 0.8"},g);
     if(k==="date"&&b.style==="boxes"){
-      for(let i=0;i<8;i++){const bx=dateBoxX(b,i);
-        el("rect",{x:bx,y:b.y,width:b.pitch,height:b.bh,fill:"#ffffff","fill-opacity":0.5,stroke:"#7f9a90","stroke-width":0.25},g);
-        el("text",{x:bx+b.pitch/2,y:b.y+b.bh+1.6,"font-size":1.4,"text-anchor":"middle",fill:"#7c948b","font-family":"Helvetica, Arial"},g,"DDMMYYYY"[i]);
-        if(T.date[i]) el("text",{x:bx+b.pitch/2,y:b.y+b.bh/2+0.716*b.size*PT/2,"font-size":b.size*PT,"text-anchor":"middle","font-family":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink},g,T.date[i]);}
+      for(let i=0;i<8;i++){const bx=dateBoxX(b,i), by=dateBoxY(b,i); const gb=el("g",{class:"dbox"+(SEL==="date:"+i?" sel-box":""),"data-box":i},g);
+        el("rect",{class:"boxbg",x:bx,y:by,width:b.pitch,height:b.bh,fill:"#ffffff","fill-opacity":0.5,stroke:"#7f9a90","stroke-width":0.25},gb);
+        el("text",{x:bx+b.pitch/2,y:by+b.bh+1.6,"font-size":1.4,"text-anchor":"middle",fill:"#7c948b","font-family":"Helvetica, Arial"},gb,"DDMMYYYY"[i]);
+        if(T.date[i]) el("text",{x:bx+b.pitch/2,y:by+b.bh/2+0.716*b.size*PT/2,"font-size":b.size*PT,"text-anchor":"middle","font-family":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink},gb,T.date[i]);}
       g.querySelectorAll("rect")[0].setAttribute("opacity",0); // hide the generic box background
       const lbl=g.querySelector("text"); if(lbl&&lbl.textContent==="Date") lbl.remove();
       return;
@@ -462,8 +477,8 @@ function render(){
   el("text",Object.assign({},art,{x:8,y:9,"font-size":4,"font-weight":"bold",fill:"#6f8a80"}),null,S.bank.toUpperCase());
   el("text",Object.assign({},art,{x:8,y:13}),null,"Branch name, code & city");
   // date boxes
-  for(let i=0;i<8;i++){const cx=lay.date.x+i*lay.date.pitch;el("rect",Object.assign({},stroke,{x:cx-lay.date.pitch/2,y:lay.date.y-5,width:lay.date.pitch,height:6.5}));}
-  ["D","D","M","M","Y","Y","Y","Y"].forEach((c,i)=>el("text",Object.assign({},art,{x:lay.date.x+i*lay.date.pitch,y:lay.date.y+3.6,"text-anchor":"middle","font-size":1.8}),null,c));
+  for(let i=0;i<8;i++){const cx=stdDateX(lay.date,i),cy=stdDateY(lay.date,i);el("rect",Object.assign({},stroke,{x:cx-lay.date.pitch/2,y:cy-5,width:lay.date.pitch,height:6.5}));}
+  ["D","D","M","M","Y","Y","Y","Y"].forEach((c,i)=>el("text",Object.assign({},art,{x:stdDateX(lay.date,i),y:stdDateY(lay.date,i)+3.6,"text-anchor":"middle","font-size":1.8}),null,c));
   // payee line
   el("text",Object.assign({},art,{x:lay.payee.x-9,y:lay.payee.y}),null,"Pay");
   el("line",Object.assign({},stroke,{x1:lay.payee.x-3,y1:lay.payee.y+1,x2:Math.max(lay.bearer.x2,lay.payee.x+lay.payee.maxw),y2:lay.payee.y+1}));
@@ -489,7 +504,9 @@ function render(){
   const box=(g,x,y,w,h)=>el("rect",{class:"hl",x,y,width:w,height:h,fill:"rgba(15,92,122,.08)",stroke:"#0f5c7a","stroke-width":0.25,"stroke-dasharray":"1 0.8"},g);
   const grp=(name)=>{const g=el("g",{class:"fld"+(SEL===name?" sel":""),"data-f":name});return g;};
   let g=grp("date"); box(g,lay.date.x-lay.date.pitch/2,lay.date.y-5,lay.date.pitch*8,6.5);
-  (D.ddmmyyyy||"").split("").forEach((c,i)=>{const t=T(lay.date.x+i*lay.date.pitch,lay.date.y,lay.date.size,c,{"text-anchor":"middle"});g.appendChild(t);});
+  for(let i=0;i<8;i++){const gb=el("g",{class:"dbox"+(SEL==="date:"+i?" sel-box":""),"data-box":i},g);const cx=stdDateX(lay.date,i),cy=stdDateY(lay.date,i);
+    el("rect",{class:"boxbg",x:cx-lay.date.pitch/2,y:cy-5,width:lay.date.pitch,height:6.5,fill:"transparent",stroke:"none","stroke-width":0.3},gb);
+    const c=(D.ddmmyyyy||"")[i]; if(c) gb.appendChild(T(cx,cy,lay.date.size,c,{"text-anchor":"middle"}));}
   g=grp("payee"); box(g,lay.payee.x,lay.payee.y-4.5,lay.payee.maxw,6); g.appendChild(T(lay.payee.x,lay.payee.y,lay.payee.size,D.payee));
   const sp=D.words?splitWords(D.words):{l1:"",l2:"",pt:lay.wordsSize,fit:true};
   g=grp("words1"); box(g,lay.words1.x,lay.words1.y-4.5,lay.words1.maxw,6); g.appendChild(T(lay.words1.x,lay.words1.y,sp.pt,sp.l1));
@@ -521,9 +538,9 @@ let drag=null;
 function svgPt(e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
 svg.addEventListener("pointerdown",e=>{
   const hd=e.target.closest(".handle");
-  if(hd&&SEL){const lay=L();const o=SEL==="area"?lay.area:(lay.mode==="excel"?lay.boxes[SEL]:lay[SEL]);drag={f:SEL,resize:hd.dataset.h,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();return;}
-  const g=e.target.closest(".fld");if(!g){if(SEL){SEL=null;render();}return;}const f=g.dataset.f;SEL=f;const lay=L();const o=f==="area"?lay.origin:(lay.mode==="excel"?lay.boxes[f]:lay[f]);drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
-svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx=+(p.x-drag.start.x).toFixed(1),dy=+(p.y-drag.start.y).toFixed(1);const o=drag.f==="area"?(drag.resize?L().area:L().origin):(L().mode==="excel"?L().boxes[drag.f]:L()[drag.f]);
+  if(hd&&SEL){const lay=L();const o=fieldObj(SEL,lay);drag={f:SEL,resize:hd.dataset.h,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();return;}
+  const g=e.target.closest(".fld");if(!g){if(SEL){SEL=null;render();}return;}const db=e.target.closest("[data-box]");const f=(db&&g.dataset.f==="date"&&!e.shiftKey&&!(SEL==="date"))?"date:"+db.dataset.box:g.dataset.f;SEL=f;const lay=L();const o=f==="area"?lay.origin:fieldObj(f,lay);drag={f,start:svgPt(e),orig:clone(o)};svg.setPointerCapture(e.pointerId);e.preventDefault();});
+svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx=+(p.x-drag.start.x).toFixed(1),dy=+(p.y-drag.start.y).toFixed(1);const o=drag.f==="area"?(drag.resize?L().area:L().origin):fieldObj(drag.f);
   if(drag.resize){const R=drag.resize, ex=R==="e"||R==="se", sy=R==="s"||R==="se", oo=drag.orig;
     if(o.style==="boxes"){ if(ex)o.pitch=Math.max(2,r1(oo.pitch+dx/8)); if(sy)o.bh=Math.max(2,r1(oo.bh+dy)); syncDateBox(o); }
     else if(L().mode==="excel"){ if(ex)o.w=Math.max(3,r1(oo.w+dx)); if(sy)o.h=Math.max(2,r1(oo.h+dy)); }
@@ -553,24 +570,24 @@ function selectedHandles(){
 /* ---------- edit the selected field from the preview ---------- */
 let SEL=null;
 const FNAME={area:"Print area (everything together)",date:"Date",payee:"Pay to",words:"Amount in words",words1:"Words line 1",words2:"Words line 2",figures:"Amount (figures)",payeeOnly:"A/C Payee crossing",bearer:"'or bearer' strike-out"};
-function selObj(){const lay=L();if(!SEL)return null;if(SEL==="area")return lay.mode==="excel"?lay.area:null;return lay.mode==="excel"?lay.boxes[SEL]:lay[SEL];}
+function selObj(){if(!SEL)return null;return fieldObj(SEL);}
 
 function nudge(dx,dy){let o=selObj();if(!o)return;if(SEL==="area")o=L().origin;const mv=(v,d)=>d?r1(v+d):v;if(SEL==="bearer"){o.x1=mv(o.x1,dx);o.x2=mv(o.x2,dx);o.y=mv(o.y,dy);}else{o.x=mv(o.x,dx);o.y=mv(o.y,dy);}markEdited();buildLayoutTable();render();}
-function resize(d){const lay=L(),o=selObj();if(!o)return;
+function resize(d){const lay=L();let o=selObj();if(!o)return;if(boxIndex(SEL)>=0)o=lay.mode==="excel"?lay.boxes.date:lay.date;
   if(lay.mode!=="excel"&&(SEL==="words1"||SEL==="words2")){lay.wordsSize=Math.max(5,r1(lay.wordsSize+d));}
   else if(o.size!=null){o.size=Math.max(5,r1(o.size+d));} else return;
   markEdited();buildLayoutTable();render();}
-function widen(d){const lay=L(),o=selObj();if(!o)return;
+function widen(d){const lay=L(),o=selObj();if(!o||boxIndex(SEL)>=0)return;
   if(SEL==="area"){o.w=Math.max(10,r1(o.w+d));}
   else if(lay.mode==="excel"&&o.style==="boxes"){o.pitch=Math.max(2,r1(o.pitch+d/8));syncDateBox(o);}
   else if(lay.mode==="excel"){o.w=Math.max(5,r1(o.w+d));}
   else if(o.maxw!=null){o.maxw=Math.max(5,r1(o.maxw+d));}
   else if(SEL==="date"){o.pitch=Math.max(2,r1(o.pitch+d/8));}
   else return; markEdited();buildLayoutTable();render();}
-function taller(d){const lay=L(),o=selObj();if(!o||lay.mode!=="excel")return;
+function taller(d){const lay=L(),o=selObj();if(!o||lay.mode!=="excel"||boxIndex(SEL)>=0)return;
   if(o.style==="boxes"){o.bh=Math.max(2,r1(o.bh+d));syncDateBox(o);} else o.h=Math.max(2,r1(o.h+d));
   markEdited();buildLayoutTable();render();}
-function toggleBold(){const o=selObj();if(!o||L().mode!=="excel")return;o.bold=!o.bold;markEdited();render();}
+function toggleBold(){const o=boxIndex(SEL)>=0?L().boxes.date:selObj();if(!o||L().mode!=="excel")return;o.bold=!o.bold;markEdited();render();}
 function updateSaveBar(){
   const dirty=isDirty(); $("btnSaveLayout").disabled=!dirty; $("btnDiscard").disabled=!dirty;
   $("saveState").textContent=dirty?"You have unsaved changes for "+S.bank+".":"Layout for "+S.bank+" is saved.";
@@ -583,8 +600,14 @@ function updateSaveBar(){
   $("btnBold").hidden=lay.mode!=="excel"; $("btnBold").setAttribute("aria-pressed",!!o.bold);
   $("btnShort").hidden=$("btnTall").hidden=lay.mode!=="excel";
   $("btnSmaller").hidden=$("btnBigger").hidden=SEL==="area";
+  $("btnAllBoxes").hidden=!(boxIndex(SEL)>=0); $("btnOneBox").hidden=SEL!=="date";
+  if(boxIndex(SEL)>=0){const i=boxIndex(SEL),D0=lay.mode==="excel"?lay.boxes.date:lay.date;
+    $("btnNarrow").hidden=$("btnWide").hidden=$("btnShort").hidden=$("btnTall").hidden=true;
+    $("btnBold").setAttribute("aria-pressed",!!D0.bold);
+    $("selName").textContent=`Date box ${i+1} (${"DDMMYYYY"[i]}) · shifted ${o.x>=0?"+":""}${o.x}, ${o.y>=0?"+":""}${o.y} mm`;return;}
+  $("btnNarrow").hidden=$("btnWide").hidden=false;
   if(SEL==="area"){$("btnBold").hidden=true;$("selName").textContent=FNAME.area+" · "+o.w+" × "+o.h+" mm · at "+lay.origin.x+", "+lay.origin.y+" mm on the page";return;}
-  const isBoxes=SEL==="date"&&(o.style==="boxes"||lay.mode!=="excel");
+  const isBoxes=SEL==="date"&&!!o.pitch&&(o.style==="boxes"||lay.mode!=="excel");
   $("btnNarrow").textContent=isBoxes?"⇤ Smaller boxes":"⇤ Narrower"; $("btnWide").textContent=isBoxes?"Bigger boxes ⇥":"Wider ⇥";
   if(isBoxes&&o.pitch!=null) $("selName").textContent+=" · box "+o.pitch+" mm";
   else if(lay.mode==="excel"&&o.w!=null) $("selName").textContent+=" · "+o.w+" × "+o.h+" mm";
@@ -596,6 +619,8 @@ $("btnWide").addEventListener("click",()=>widen(2));
 $("btnBold").addEventListener("click",toggleBold);
 $("btnShort").addEventListener("click",()=>taller(-1));
 $("btnTall").addEventListener("click",()=>taller(1));
+$("btnAllBoxes").addEventListener("click",()=>{SEL="date";render();});
+$("btnOneBox").addEventListener("click",()=>{SEL="date:0";render();});
 document.querySelectorAll("[data-nudge]").forEach(b=>b.addEventListener("click",()=>{const [x,y]=b.dataset.nudge.split(",").map(Number);nudge(x,y);}));
 $("btnSaveLayout").addEventListener("click",saveLayout);
 window.addEventListener("beforeunload",e=>{if(Object.keys(DRAFT).some(b=>isDirty(b))){e.preventDefault();e.returnValue="";}});
@@ -607,6 +632,10 @@ document.addEventListener("keydown",e=>{if(!SEL)return;const t=e.target.tagName;
 /* ---------- layout table ---------- */
 const FIELDS=[["date","Date",["x","y","size","pitch"]],["payee","Pay to",["x","y","size","maxw"]],["words1","Words line 1",["x","y","maxw"]],["words2","Words line 2",["x","y","maxw"]],["figures","Amount (figures)",["x","y","size"]],["payeeOnly","A/C Payee crossing",["x","y","size","angle"]],["bearer","'or bearer' strike-out",["x1","x2","y"]]];
 const COLN={x:"X",y:"Y",size:"Font pt",pitch:"Box gap",maxw:"Width",angle:"Angle°",x1:"From X",x2:"To X"};
+function shiftRows(d){const o=offs(d);let h="";
+  ["x","y"].forEach(c=>{h+=`<tr><td>Date boxes: own shift ${c.toUpperCase()}</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">`+
+    o.map((v,i)=>`<label style="display:flex;align-items:center;gap:3px;font-weight:400" for="S-${c}-${i}">${"DDMMYYYY"[i]}${i+1}<input id="S-${c}-${i}" type="number" step="0.5" data-shift="${i}" data-c="${c}" value="${v[c]}" style="width:56px"></label>`).join("")+"</td></tr>";});
+  return h;}
 function buildLayoutTable(){
   const lay=L(); const t=$("layoutTable");
   if(lay.mode==="excel"){
@@ -614,15 +643,19 @@ function buildLayoutTable(){
     let h="<thead><tr><th>Field</th><th class='num'>Values (mm)</th></tr></thead><tbody>";
     h+=`<tr><td>Print area position on page</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">${inp("origin","x",lay.origin.x)}${inp("origin","y",lay.origin.y)}</td></tr>`;
     Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k];const cols=(k==="date"&&b.style==="boxes")?["x","y","pitch","bh","gap","size"]:["x","y","w","h","size"];h+=`<tr><td>${k==="date"&&b.style==="boxes"?"Date boxes":BOXN[k]}</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">`+cols.map(c=>inp(k,c,b[c])).join("")+"</td></tr>";});
+    if(lay.boxes.date.style==="boxes") h+=shiftRows(lay.boxes.date);
     t.innerHTML=h+"</tbody>"; return;
   }
   let h="<thead><tr><th>Field</th><th class='num'>Values (mm)</th></tr></thead><tbody>";
   FIELDS.forEach(([k,name,keys])=>{h+=`<tr><td>${name}</td><td style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">`+keys.map(c=>`<label style="display:flex;align-items:center;gap:4px;font-weight:400" for="L-${k}-${c}">${COLN[c]}<input id="L-${k}-${c}" type="number" step="0.5" data-k="${k}" data-c="${c}" value="${lay[k][c]}"></label>`).join("")+"</td></tr>";});
+  h+=shiftRows(lay.date);
   h+=`<tr><td>Words font</td><td style="text-align:right"><label style="display:inline-flex;align-items:center;gap:4px;font-weight:400" for="L-wordsSize">Font pt<input id="L-wordsSize" type="number" step="0.5" data-k="wordsSize" value="${lay.wordsSize}"></label></td></tr></tbody>`;
   t.innerHTML=h;
   $("cw").value=lay.w; $("ch").value=lay.h;
 }
-$("layoutTable").addEventListener("input",e=>{const i=e.target;if(!i.dataset.k)return;const v=parseFloat(i.value);if(isNaN(v))return;const lay=L();
+$("layoutTable").addEventListener("input",e=>{const i=e.target;
+  if(i.dataset.shift!=null){const v=parseFloat(i.value);if(isNaN(v))return;const lay=L();offs(lay.mode==="excel"?lay.boxes.date:lay.date)[+i.dataset.shift][i.dataset.c]=v;markEdited();render();return;}
+  if(!i.dataset.k)return;const v=parseFloat(i.value);if(isNaN(v))return;const lay=L();
   if(lay.mode==="excel"){const o=(i.dataset.k==="origin"?lay.origin:lay.boxes[i.dataset.k]);o[i.dataset.c]=v;if(o.style==="boxes")syncDateBox(o);markEdited();render();return;}
   if(i.dataset.k==="wordsSize")lay.wordsSize=v;else lay[i.dataset.k][i.dataset.c]=v;markEdited();render();});
 ["cw","ch"].forEach(id=>$(id).addEventListener("input",()=>{const v=parseFloat($(id).value);if(isNaN(v)||v<50)return;L()[id==="cw"?"w":"h"]=v;markEdited();render();}));
@@ -655,7 +688,7 @@ function makePdfExcel(test){
   const T=excelTexts(D,test);
   Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k]; if(!T[k])return;
     if(k==="date"&&b.style==="boxes"){doc.setFont(b.font||"helvetica",b.bold?"bold":"normal");doc.setFontSize(b.size);
-      for(let i=0;i<8;i++){const bx=dateBoxX(b,i); if(test){doc.setDrawColor(150);doc.rect(ox+bx,oy+b.y,b.pitch,b.bh);} if(T.date[i]) doc.text(T.date[i],ox+bx+b.pitch/2,oy+b.y+b.bh/2+0.716*b.size*PT/2,{align:"center"});}
+      for(let i=0;i<8;i++){const bx=dateBoxX(b,i), by=dateBoxY(b,i); if(test){doc.setDrawColor(150);doc.rect(ox+bx,oy+by,b.pitch,b.bh);} if(T.date[i]) doc.text(T.date[i],ox+bx+b.pitch/2,oy+by+b.bh/2+0.716*b.size*PT/2,{align:"center"});}
       return;}
     const r=boxLines(b,T[k]);
     doc.setFont(b.font,b.bold?"bold":"normal"); doc.setFontSize(r.size);
@@ -676,7 +709,7 @@ function makePdf(test){
     doc.setFontSize(6); doc.setTextColor(120);
     doc.text(`TEST PRINT • ${S.bank} • ${lay.w}x${lay.h} mm • offset ${S.offX}/${S.offY}`,X(4),Y(lay.h-3));
     [[0,0],[lay.w,0],[0,lay.h],[lay.w,lay.h]].forEach(([x,y])=>{doc.line(X(x)-3,Y(y),X(x)+3,Y(y));doc.line(X(x),Y(y)-3,X(x),Y(y)+3);});
-    for(let i=0;i<8;i++){doc.rect(X(lay.date.x+i*lay.date.pitch-lay.date.pitch/2),Y(lay.date.y-5),lay.date.pitch,6.5);}
+    for(let i=0;i<8;i++){doc.rect(X(stdDateX(lay.date,i)-lay.date.pitch/2),Y(stdDateY(lay.date,i)-5),lay.date.pitch,6.5);}
     doc.line(X(lay.payee.x),Y(lay.payee.y+1),X(lay.payee.x+lay.payee.maxw),Y(lay.payee.y+1));
     doc.line(X(lay.words1.x),Y(lay.words1.y+1),X(lay.words1.x+lay.words1.maxw),Y(lay.words1.y+1));
     doc.line(X(lay.words2.x),Y(lay.words2.y+1),X(lay.words2.x+lay.words2.maxw),Y(lay.words2.y+1));
@@ -684,7 +717,7 @@ function makePdf(test){
   }
   const d=D.ddmmyyyy||(test?"01012026":"");
   doc.setFontSize(lay.date.size);
-  d.split("").forEach((c,i)=>doc.text(c,X(lay.date.x+i*lay.date.pitch),Y(lay.date.y),{align:"center"}));
+  d.split("").forEach((c,i)=>doc.text(c,X(stdDateX(lay.date,i)),Y(stdDateY(lay.date,i)),{align:"center"}));
   doc.setFontSize(lay.payee.size); doc.text(D.payee||(test?"Pay To Sample Name":""),X(lay.payee.x),Y(lay.payee.y));
   const words=D.words||(test?toWords({rs:335520,paisa:0}):"");
   if(words){const sp=splitWords(words);doc.setFontSize(sp.pt);doc.text(sp.l1,X(lay.words1.x),Y(lay.words1.y));if(sp.l2)doc.text(sp.l2,X(lay.words2.x),Y(lay.words2.y));}
