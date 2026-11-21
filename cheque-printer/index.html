@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="banks.js?v=2026112115"></script>
-<script src="cheque-reader.js?v=2026112115"></script>
+<script src="banks.js?v=2026112117"></script>
+<script src="cheque-reader.js?v=2026112117"></script>
 <style>
 :root{
   /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
@@ -168,6 +168,44 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
 .steps{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:12.5px}
 .steps li{margin:3px 0}
 .reg-empty{color:var(--muted);font-size:13px}
+/* ---- one-screen print view (no scrolling on a desktop screen) ---- */
+@media (min-width:861px){
+  html,body{height:100%}
+  body{display:flex;flex-direction:column;min-height:0}
+  header{padding:8px 16px;gap:4px 16px}
+  h1{font-size:20px}
+  .titles p{font-size:12px}
+  #printView{flex:1 1 auto;min-height:0;padding:10px 16px 12px;gap:12px;grid-template-columns:minmax(250px,300px) minmax(0,1fr);align-items:stretch}
+  #printView .card{padding:12px}
+  #printView .stack{gap:8px;align-content:start;overflow:auto}
+  #printView label{gap:2px}
+  #printView input,#printView select{padding:6px 9px}
+  #printView input.amount{font-size:18px}
+  .right{min-height:0;display:flex;flex-direction:column}
+  .right>.card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:8px}
+  .right>.card>h2{margin:0}
+  .preview-wrap{flex:1 1 auto;min-height:120px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  #chq{min-width:0;width:100%;height:100%;max-height:100%}
+  .bankview{padding:10px 16px;gap:10px}
+  .bv-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+  .bcard{padding:9px 12px;gap:4px}
+  .bcard .bs{display:none}
+  .bcard .bn{font-size:14px}
+}
+#chq{min-width:0}
+.feednote.main{display:flex;align-items:center;gap:12px;margin:0;padding:6px 10px}
+.feednote.main svg{flex:none;width:86px;margin:0!important}
+.quick{margin:0;gap:6px}
+.quickrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.copytile{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.copytile .inl{display:inline;font-size:12.5px;color:var(--muted);font-weight:500}
+.copytile select{width:auto;min-width:180px;padding:6px 8px}
+.savebar{gap:6px}
+.tapnote{margin:0}
+dialog.sheet{border:none;border-radius:12px;padding:0;width:min(1000px,96vw);max-height:90vh;background:var(--card);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog.sheet::backdrop{background:rgba(10,20,30,.5)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.dlg-head button{padding:4px 10px}
 </style>
 </head>
 <body>
@@ -179,6 +217,7 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
   </div>
   <div class="actions" id="printActions">
     <div class="btns">
+      <button type="button" id="btnReg">Register</button>
       <button class="primary" id="btnPrint">Print now</button>
       <button id="btnPdf">Download PDF</button>
       <button id="btnTest">Test print (plain paper)</button>
@@ -214,11 +253,6 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
     </label>
     <div class="words" id="wordsBox"><b>Amount in words</b><span id="wordsTxt">-</span></div>
     <div class="msg warn" id="warn" role="status"></div>
-    <ol class="steps">
-      <li>Fill in the date, Pay to and amount.</li>
-      <li>Click <b>Print now</b>. In the print window keep <b>Actual size / 100%</b> (turn off "Fit to page").</li>
-      <li>Put the cheque in the printer as shown under the preview.</li>
-    </ol>
   </section>
 
   <div class="right">
@@ -227,7 +261,7 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
       <div class="preview-wrap"><svg id="chq" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cheque preview"></svg></div>
       <div class="feednote main" id="feedNote"></div>
       <div class="quick">
-        <p class="tapnote" id="tapNote">Click any box in the preview (date, Pay to, amount, words) to change its place or size.</p>
+        <p class="tapnote" id="tapNote">Click a box in the preview (date, Pay to, amount, words) to move it or change its size. Drag it, or use the arrows. Then Save layout.</p>
         <div class="editbar" id="editBar" aria-label="Edit the selected box" hidden>
         <div class="fieldbar" id="fieldBar">
         <span class="selname" id="selName">Click a field in the preview to edit it</span>
@@ -250,26 +284,27 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
         </span>
         </div>
         <div class="rowstate" id="rowState" role="status"></div>
-        <p class="hint" style="margin:0">Drag the box, or use the arrows (0.5 mm each, Shift + arrow keys for 2 mm). Drag the orange handles to make it narrower, wider, shorter or taller. Clicking one date box moves only that box. Click outside the boxes when you are done, then <b>Save layout</b>.</p>
+        
         </div>
         <div class="quickrow">
-          <div class="tile copytile">
-            <h3>Same layout as another bank</h3>
-            <p>Copy another bank's layout, or go back to the SBP standard layout.</p>
-            <div class="copyrow"><select id="copyFrom" aria-label="Copy the layout from"></select><button type="button" id="btnCopyFrom">Use this layout</button></div>
-          </div>
+          <div class="copytile"><label for="copyFrom" class="inl">Same layout as</label><select id="copyFrom" aria-label="Copy the layout from"></select><button type="button" id="btnCopyFrom">Use this layout</button></div>
           <div class="savebar">
           <span class="save-state" id="saveState"></span>
           <span class="btns">
+          <button type="button" id="btnMore">More settings</button>
           <button type="button" id="btnDiscard">Discard changes</button>
           <button type="button" class="primary" id="btnSaveLayout">Save layout</button>
           </span>
           </div>
         </div>
       </div>
-      <details id="adjust">
-        <summary>More settings: set up from a photo, move the whole print, printer and text format</summary>
-        <div class="adjust-body">
+    </section>
+
+  </div>
+</main>
+<dialog id="adjust" class="sheet" aria-label="More settings">
+  <div class="dlg">
+    <div class="dlg-head"><h2>More settings · <span id="adjBank"></span></h2><button type="button" id="adjClose" aria-label="Close">✕</button></div>
         <div class="simple">
           <div class="tiles">
             <div class="tile">
@@ -361,21 +396,19 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
               <label class="check" for="upper"><input type="checkbox" id="upper"> Amount in words in CAPITALS</label>
             </div>
           </div>
-        </div>
-      </details>
-    </section>
-
-    <section class="card" aria-label="Cheque register">
-      <h2>Cheque register</h2>
+  </div>
+</dialog>
+<dialog id="regDlg" class="sheet" aria-label="Cheque register">
+  <div class="dlg">
+    <div class="dlg-head"><h2>Cheque register</h2><button type="button" id="regClose" aria-label="Close">✕</button></div>
       <div id="regWrap"></div>
       <div class="btns" style="margin-top:10px">
         <button id="btnAddReg">Add this cheque to the register</button>
         <button id="btnCsv">Export register (CSV for Excel)</button>
       </div>
       <p class="hint">The register and layouts are saved in this browser. To use the same layouts on another computer, export them here and import them there.</p>
-    </section>
   </div>
-</main>
+</dialog>
 <dialog id="photoDlg" aria-label="Read cheque photo">
   <div class="dlg" id="dlgStep1">
     <h2>Step 1 of 2: check the cheque edges</h2>
@@ -812,12 +845,12 @@ function updateRowState(){const c=rowCheck(L());const e=$("rowState");if(!c){e.t
   e.textContent=(c.ok?"✓ ":"⚠ ")+rowMessage(c);e.className="rowstate "+(c.ok?"ok":"bad");}
 function updateFeedNote(){
   const lay=L(), e=$("feedNote");
-  if(lay.mode==="excel"){e.innerHTML="<b>Putting the cheque in the printer:</b> this bank prints on Letter, landscape, the same as your Excel templates, so put the cheque in the same way as before. Not sure? Print <i>Test print (plain paper)</i>: it shows where the cheque sits.";return;}
-  if(S.paper==="feed"){e.innerHTML=`<b>Putting the cheque in the printer:</b> the <b>date and amount side</b> (right edge) goes in first, printing side as marked on your printer.
+  if(lay.mode==="excel"){e.innerHTML="<span><b>Putting the cheque in the printer:</b> this bank prints on Letter, landscape, the same as your Excel templates, so put the cheque in the same way as before. Not sure? Print <i>Test print (plain paper)</i>: it shows where the cheque sits.</span>";return;}
+  if(S.paper==="feed"){e.innerHTML=`<span><b>Putting the cheque in the printer:</b> the <b>date and amount side</b> (right edge) goes in first, printing side as marked on your printer.</span>
     <svg viewBox="0 0 120 58" width="160" aria-hidden="true" style="display:block;margin-top:6px"><rect x="20" y="2" width="80" height="10" rx="2" fill="none" stroke="currentColor"/><text x="60" y="9.5" font-size="6" text-anchor="middle" fill="currentColor">printer</text>
     <rect x="44" y="18" width="32" height="38" rx="1.5" fill="none" stroke="currentColor"/><g fill="currentColor" font-size="4.2"><text x="60" y="24" text-anchor="middle">DATE · PKR</text><text x="60" y="52" text-anchor="middle">bank name</text></g>
     <path d="M60 30 V14" stroke="#c2410c" stroke-width="1.6"/><path d="M56 18 L60 13 L64 18" fill="none" stroke="#c2410c" stroke-width="1.6"/></svg>`;return;}
-  e.innerHTML="<b>Putting the cheque in the printer:</b> see <i>Paper in printer</i> under Layout &amp; printer settings. Print a test page on plain paper first.";
+  e.innerHTML="<span><b>Putting the cheque in the printer:</b> see <i>Paper in printer</i> in More settings. Print a test page on plain paper first.</span>";
 }
 function updateSaveBar(){
   updateRowState(); updateFeedNote(); $("moveState").textContent=moveStateText();
@@ -1178,7 +1211,7 @@ $("dlgBack").addEventListener("click",()=>{$("dlgStep1").hidden=false;$("dlgStep
 $("dlgCancel").addEventListener("click",()=>$("photoDlg").close());
 $("dlgUse").addEventListener("click",()=>{
   DRAFT[S.bank]=fieldsToLayout(RES.F,RES.W,RES.H); delete VIEWBASE[S.bank]; SEL=null; LASTVB=null;
-  $("photoDlg").close(); $("adjust").open=true; buildLayoutTable(); render();
+  $("photoDlg").close(); if($("adjust").open)$("adjust").close(); buildLayoutTable(); render();
   say("Boxes read from the photo. Do a test print on plain paper, check it against the cheque, then click Save layout.","ok");
 });
 const dz=$("dropZone");
@@ -1228,6 +1261,11 @@ function route(){
 }
 window.addEventListener("hashchange",route);
 
+$("btnMore").addEventListener("click",()=>{$("adjBank").textContent=S.bank;$("adjust").showModal();});
+$("adjClose").addEventListener("click",()=>$("adjust").close());
+$("btnReg").addEventListener("click",()=>{renderReg();$("regDlg").showModal();});
+$("regClose").addEventListener("click",()=>$("regDlg").close());
+["adjust","regDlg"].forEach(id=>$(id).addEventListener("click",e=>{if(e.target===$(id))$(id).close();}));
 syncPresets(); fillBanks(); fillCopyFrom(); buildLayoutTable(); render(); renderReg(); route();
 })();
 </script>
