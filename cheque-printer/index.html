@@ -286,7 +286,7 @@ function persist(){try{localStorage.setItem("chq-printer-v1",JSON.stringify(S));
 const PRESETS=window.BANK_PRESETS||{};
 function presetFor(b){return PRESETS[b]?Object.assign(clone(STD),clone(PRESETS[b])):null;}
 function r1(v){return Math.round(v*10)/10;}
-const VIEWBASE={};
+const VIEWBASE={}; let LASTVB=null;
 // Edits go into a draft; "Save layout" makes them permanent for that bank.
 const DRAFT={};
 function savedLayout(b){const lay=upgradeDate((S.edited&&S.edited[b]&&S.layouts[b])?clone(S.layouts[b]):(presetFor(b)||clone(STD)));
@@ -453,6 +453,8 @@ function renderExcel(lay,D){
   const sx=lay.origin.x-vb.x, sy=lay.origin.y-vb.y; const rs=[{x:0,y:0,w:A.w,h:A.h}];
   Object.keys(lay.boxes).forEach(k=>{const q=lay.boxes[k];if(q.style==="boxes"){(dateRects(lay)||[]).forEach(r=>rs.push({x:r.x,y:r.y-3,w:r.w+12,h:r.h+8}));}else rs.push(q);});
   let x1=0,y1=0,x2=vb.w,y2=vb.h; rs.forEach(r=>{x1=Math.min(x1,r.x+sx);y1=Math.min(y1,r.y+sy-3);x2=Math.max(x2,r.x+r.w+sx);y2=Math.max(y2,r.y+r.h+sy);});
+  // Keep the frame still while dragging, otherwise the mouse-to-mm scale changes under the pointer.
+  if(drag&&LASTVB) [x1,y1,x2,y2]=LASTVB; else LASTVB=[x1,y1,x2,y2];
   svg.setAttribute("viewBox",`${x1-m} ${y1-m} ${x2-x1+2*m} ${y2-y1+2*m}`);
   svg.firstChild.setAttribute("x",x1-m);svg.firstChild.setAttribute("y",y1-m);svg.firstChild.setAttribute("width",x2-x1+2*m);svg.firstChild.setAttribute("height",y2-y1+2*m);
   $("wordsTxt").textContent=D.words||"-";
@@ -712,7 +714,7 @@ $("layoutTable").addEventListener("input",e=>{const i=e.target;
 
 /* ---------- banks ---------- */
 function fillBanks(){const all=[...BANKS,...S.custom].sort((a,b)=>a.localeCompare(b));if(!all.includes(S.bank))all.unshift(S.bank);$("bank").innerHTML=all.map(b=>`<option${b===S.bank?" selected":""}>${b.replace(/</g,"&lt;")}</option>`).join("");}
-$("bank").addEventListener("change",()=>{S.bank=$("bank").value;SEL=null;persist();buildLayoutTable();render();});
+$("bank").addEventListener("change",()=>{S.bank=$("bank").value;SEL=null;LASTVB=null;persist();buildLayoutTable();render();});
 $("btnAddBank").addEventListener("click",()=>{const n=$("newBank").value.trim();if(!n)return;if(!S.custom.includes(n)&&!BANKS.includes(n))S.custom.push(n);S.layouts[n]=S.layouts[n]||clone(L());S.edited=S.edited||{};S.edited[n]=true;S.bank=n;$("newBank").value="";persist();fillBanks();buildLayoutTable();render();});
 $("btnReset").addEventListener("click",()=>{delete S.layouts[S.bank];if(S.edited)delete S.edited[S.bank];delete DRAFT[S.bank];delete VIEWBASE[S.bank];persist();buildLayoutTable();render();say("Layout for "+S.bank+" is back to the bank default.","ok");});
 
