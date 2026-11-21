@@ -31,8 +31,9 @@ h1{font:600 24px/1.1 var(--display);margin:0;text-wrap:balance}
 header p{margin:0;color:var(--muted);font-size:13px}
 .back{flex-basis:100%;color:var(--accent);text-decoration:none;font-size:13px;font-weight:500}
 .back:hover{text-decoration:underline}
-main{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:16px;padding:12px 20px 24px;align-items:start}
-@media (max-width:860px){main{grid-template-columns:1fr}}
+main{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:16px;padding:12px 20px 24px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.right,.card{min-width:0}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
 .card h2{font:600 13px/1 var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
 .stack{display:grid;gap:12px}
