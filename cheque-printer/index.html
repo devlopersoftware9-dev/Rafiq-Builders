@@ -94,6 +94,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .handle{fill:#c2410c;stroke:#fff;stroke-width:0.25}
 .h-e{cursor:ew-resize}.h-s{cursor:ns-resize}.h-se{cursor:nwse-resize}
 .sel-box .boxbg{stroke:#c2410c!important;stroke-width:0.6!important;fill:rgba(194,65,12,.12)!important;fill-opacity:1!important}
+.rowstate{font-size:12.5px}
+.rowstate.ok{color:#15803d}
+.rowstate.bad{color:#c2410c;font-weight:600}
 .fld.sel .hl{opacity:1;stroke:#c2410c;fill:rgba(194,65,12,.10)}
 .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--paper);border:1px solid var(--line);color:var(--muted)}
 .right{display:grid;gap:16px}
@@ -193,6 +196,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
             </span>
           </span>
         </div>
+        <div class="rowstate" id="rowState" role="status"></div>
         <div class="savebar">
           <span class="save-state" id="saveState"></span>
           <span class="btns">
@@ -444,7 +448,7 @@ function renderExcel(lay,D){
     if(r.overflow) warns.push(`"${BOXN[k]}" does not fit in its box.`);
     r.lines.forEach(l=>el("text",{x:l.x,y:l.y,"font-size":r.size*PT,"font-family":b.font==="times"?"Constantia, Times New Roman, serif":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink,"text-anchor":r.align==="right"?"end":r.align==="center"?"middle":"start",style:"white-space:pre"},g,l.t));
   });
-  selectedHandles(); CUR=null;
+  drawRowGuide(lay); drawGuides(); selectedHandles(); CUR=null;
   $("wordsTxt").textContent=D.words||"-";
   $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm print area`;
   $("layoutBank").textContent=S.bank;
@@ -520,7 +524,7 @@ function render(){
     el("line",{x1:po.x-1.5,y1:po.y+1.3,x2:po.x+tw+1.5,y2:po.y+1.3,stroke:ink,"stroke-width":0.3},inner);}
   if(S.strikeBearer){g=grp("bearer");box(g,lay.bearer.x1,lay.bearer.y-2.5,lay.bearer.x2-lay.bearer.x1,4);el("line",{x1:lay.bearer.x1,y1:lay.bearer.y,x2:lay.bearer.x2,y2:lay.bearer.y,stroke:ink,"stroke-width":0.4},g);}
 
-  selectedHandles();
+  drawRowGuide(lay); drawGuides(); selectedHandles();
   $("wordsTxt").textContent=D.words||"-";
   $("sizePill").textContent=`${lay.w} × ${lay.h} mm`;
   $("layoutBank").textContent=S.bank;
@@ -548,9 +552,46 @@ svg.addEventListener("pointermove",e=>{if(!drag)return;const p=svgPt(e);const dx
     else if(drag.f==="date"){ if(ex)o.pitch=Math.max(2,r1(oo.pitch+dx/8)); }
     render(); return;}
   if(drag.f==="bearer"){o.x1=+(drag.orig.x1+dx).toFixed(1);o.x2=+(drag.orig.x2+dx).toFixed(1);o.y=+(drag.orig.y+dy).toFixed(1);}
-  else{o.x=+(drag.orig.x+dx).toFixed(1);o.y=+(drag.orig.y+dy).toFixed(1);}
+  else{o.x=+(drag.orig.x+dx).toFixed(1);o.y=+(drag.orig.y+dy).toFixed(1);if(drag.f!=="area")snapDrag(drag.f,o);}
   render();});
-svg.addEventListener("pointerup",()=>{if(drag){drag=null;markEdited();buildLayoutTable();render();}});
+svg.addEventListener("pointerup",()=>{GUIDES=[];if(drag){drag=null;markEdited();buildLayoutTable();render();}});
+/* ---------- alignment helpers ---------- */
+let GUIDES=[];
+function dateRects(lay){lay=lay||L();
+  if(lay.mode==="excel"){const b=lay.boxes.date;if(b.style!=="boxes")return null;return [...Array(8)].map((_,i)=>({x:dateBoxX(b,i),y:dateBoxY(b,i),w:b.pitch,h:b.bh}));}
+  const d=lay.date;return [...Array(8)].map((_,i)=>({x:stdDateX(d,i)-d.pitch/2,y:stdDateY(d,i)-5,w:d.pitch,h:6.5}));}
+function rowCheck(lay){const R=dateRects(lay);if(!R)return null;
+  const cnt={};R.forEach(r=>{const k=r1(r.y);cnt[k]=(cnt[k]||0)+1;});
+  const ref=+Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||a-b)[0];
+  const off=R.map((r,i)=>({i,d:r1(r.y-ref)})).filter(o=>Math.abs(o.d)>=0.05);
+  return {R,ref,off,ok:off.length===0};}
+function rowMessage(c){if(!c)return "";if(c.ok)return "All 8 date boxes are in one straight line.";
+  return c.off.map(o=>`Box ${o.i+1} (${"DDMMYYYY"[o.i]}) is ${Math.abs(o.d)} mm ${o.d>0?"lower":"higher"}`).join(", ")+" than the others.";}
+function drawRowGuide(lay){const c=rowCheck(lay);if(!c)return;
+  const x1=Math.min(...c.R.map(r=>r.x)),x2=Math.max(...c.R.map(r=>r.x+r.w)),h=c.R[0].h,yl=c.ref+h+(lay.mode==="excel"?2.4:3.2);
+  const col=c.ok?"#15803d":"#c2410c";
+  el("line",{x1,y1:c.ref,x2,y2:c.ref,stroke:col,"stroke-width":0.2,"stroke-dasharray":c.ok?"":"0.8 0.6",opacity:0.9,"pointer-events":"none"});
+  el("line",{x1,y1:yl,x2,y2:yl,stroke:col,"stroke-width":0.35,"pointer-events":"none"});
+  el("text",{x:x2,y:yl+1.9,"font-size":1.5,"text-anchor":"end",fill:col,"font-family":"Helvetica, Arial","pointer-events":"none"},null,c.ok?"✓ All boxes straight":"Not straight: see orange marks");
+  c.off.forEach(o=>{const r=c.R[o.i];el("text",{x:r.x+r.w/2,y:r.y-0.8,"font-size":1.6,"text-anchor":"middle",fill:"#c2410c","font-weight":"bold","font-family":"Helvetica, Arial","pointer-events":"none"},null,(o.d>0?"↓":"↑")+Math.abs(o.d));});}
+function drawGuides(){GUIDES.forEach(g=>el("line",{x1:g.x1,y1:g.y1,x2:g.x2,y2:g.y2,stroke:"#15803d","stroke-width":0.25,"stroke-dasharray":"1 0.5","pointer-events":"none"}));}
+// While dragging, snap a field to the edges of the other fields (and a date box to its row) and show a green guide.
+function snapDrag(f,o){
+  const lay=L(); GUIDES=[]; const T=0.6;
+  const bi=boxIndex(f);
+  if(bi>=0){const c=rowCheck(lay); if(!c) return; const others=c.R.filter((_,i)=>i!==bi); const ys=others.map(r=>r.y);
+    const r=c.R[bi]; let best=null; ys.forEach(y=>{const d=y-r.y; if(Math.abs(d)<T&&(best===null||Math.abs(d)<Math.abs(best)))best=d;});
+    if(best!==null&&best!==0){o.y=r1(o.y+best);} if(best!==null){const x1=Math.min(...c.R.map(q=>q.x)),x2=Math.max(...c.R.map(q=>q.x+q.w)),y=r.y+best;GUIDES.push({x1,y1:y,x2,y2:y});}
+    return;}
+  if(lay.mode!=="excel"||!lay.boxes[f]) return;
+  const b=lay.boxes[f]; const R=Object.keys(lay.boxes).filter(k=>k!==f).map(k=>{const q=lay.boxes[k];return q.style==="boxes"?{x:q.x,y:q.y,w:8*q.pitch+2*(q.gap||0),h:q.bh}:q;});
+  const W=b.style==="boxes"?8*b.pitch+2*(b.gap||0):b.w, H=b.style==="boxes"?b.bh:b.h;
+  let bx=null,by=null;
+  R.forEach(q=>{[q.x,q.x+q.w].forEach(t=>[[b.x,0],[b.x+W,W]].forEach(([e,off])=>{const d=t-e;if(Math.abs(d)<T&&(bx===null||Math.abs(d)<Math.abs(bx.d)))bx={d,t,q};}));
+               [q.y,q.y+q.h].forEach(t=>[[b.y,0],[b.y+H,H]].forEach(([e,off])=>{const d=t-e;if(Math.abs(d)<T&&(by===null||Math.abs(d)<Math.abs(by.d)))by={d,t,q};}));});
+  if(bx){b.x=r1(b.x+bx.d);GUIDES.push({x1:bx.t,y1:Math.min(b.y,bx.q.y)-2,x2:bx.t,y2:Math.max(b.y+H,bx.q.y+bx.q.h)+2});}
+  if(by){b.y=r1(b.y+by.d);GUIDES.push({x1:Math.min(b.x,by.q.x)-2,y1:by.t,x2:Math.max(b.x+W,by.q.x+by.q.w)+2,y2:by.t});}
+}
 /* ---------- resize handles on the selected field ---------- */
 function drawHandles(x,y,w,h,kinds,hs){
   const g=el("g",{class:"handles"});
@@ -588,7 +629,10 @@ function taller(d){const lay=L(),o=selObj();if(!o||lay.mode!=="excel"||boxIndex(
   if(o.style==="boxes"){o.bh=Math.max(2,r1(o.bh+d));syncDateBox(o);} else o.h=Math.max(2,r1(o.h+d));
   markEdited();buildLayoutTable();render();}
 function toggleBold(){const o=boxIndex(SEL)>=0?L().boxes.date:selObj();if(!o||L().mode!=="excel")return;o.bold=!o.bold;markEdited();render();}
+function updateRowState(){const c=rowCheck(L());const e=$("rowState");if(!c){e.textContent="";e.className="rowstate";return;}
+  e.textContent=(c.ok?"✓ ":"⚠ ")+rowMessage(c);e.className="rowstate "+(c.ok?"ok":"bad");}
 function updateSaveBar(){
+  updateRowState();
   const dirty=isDirty(); $("btnSaveLayout").disabled=!dirty; $("btnDiscard").disabled=!dirty;
   $("saveState").textContent=dirty?"You have unsaved changes for "+S.bank+".":"Layout for "+S.bank+" is saved.";
   $("saveState").className="save-state"+(dirty?" dirty":"");
