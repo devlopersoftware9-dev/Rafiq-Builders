@@ -65,10 +65,13 @@
       if (x + y < a) { a = x + y; tl = [x, y]; } if (x + y > b) { b = x + y; br = [x, y]; }
       if (x - y > c) { c = x - y; tr = [x, y]; } if (x - y < d) { d = x - y; bl = [x, y]; }
     }
-    const corners = [tl, tr, br, bl].map(p => [(p[0] + 0.5) / sc, (p[1] + 0.5) / sc]);
+    let corners = [tl, tr, br, bl].map(p => [(p[0] + 0.5) / sc, (p[1] + 0.5) / sc]);
     const ww = (dist(corners[0], corners[1]) + dist(corners[3], corners[2])) / 2, hh = (dist(corners[0], corners[3]) + dist(corners[1], corners[2])) / 2;
-    if (ww / hh < 1.3 || ww / hh > 3.8) return full;
-    return { corners, found: true };
+    const r = ww / hh;
+    if (r >= 1.3 && r <= 3.8) return { corners, found: true, portrait: false };
+    // Cheque photographed standing up: turn the corner order so the long side is the top.
+    if (1 / r >= 1.3 && 1 / r <= 3.8) { corners = [corners[3], corners[0], corners[1], corners[2]]; return { corners, found: true, portrait: true }; }
+    return full;
   }
   function dist(p, q) { return Math.hypot(p[0] - q[0], p[1] - q[1]); }
   function estimateAspect(c) { return ((dist(c[0], c[1]) + dist(c[3], c[2])) / 2) / ((dist(c[0], c[3]) + dist(c[1], c[2])) / 2); }
@@ -177,6 +180,19 @@
     return { fields: detect(img, Wmm, Hmm), image: img };
   }
 
-  const api = { PPM, findCorners, estimateAspect, read, warp, detect };
+  // Turning the corner order by k steps turns the straightened cheque by k x 90 degrees.
+  function turn(c, k) { k = ((k % 4) + 4) % 4; return c.slice(k).concat(c.slice(0, k)); }
+  function score(F) { return Math.min(8, F.date ? F.date.length : 0) * 3 + (F.amount ? 4 : 0) + Math.min(3, F.lines.length) * 2; }
+  // Read the cheque the right way up: try it as given and upside down, keep the better result.
+  function readBest(data, w, h, corners, Wmm, Hmm) {
+    let best = null;
+    [0, 2].forEach(k => {
+      const c = turn(corners, k), r = read(data, w, h, c, Wmm, Hmm), sc = score(r.fields);
+      if (!best || sc > best.score) best = { score: sc, corners: c, fields: r.fields, image: r.image, turned: k };
+    });
+    return best;
+  }
+
+  const api = { PPM, findCorners, estimateAspect, read, readBest, turn, score, warp, detect };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.ChequeReader = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -324,6 +324,7 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
     <h2>Step 1 of 2: check the cheque edges</h2>
     <p class="hint" style="margin:0">The orange dots should sit on the 4 corners of the cheque. Drag a dot if it is off. Then enter the cheque size from a ruler.</p>
     <div class="stage"><svg id="cornerSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div class="btns"><button type="button" id="rotL">⟲ Rotate left</button><button type="button" id="rotR">⟳ Rotate right</button><button type="button" id="cornersAuto">Find corners again</button><button type="button" id="cornersAll">Use the whole picture</button></div>
     <div class="row2">
       <label for="dlgW">Cheque width (mm)<input id="dlgW" type="number" step="0.5" min="120" max="230"></label>
       <label for="dlgH">Cheque height (mm)<input id="dlgH" type="number" step="0.5" min="55" max="110"></label>
@@ -336,6 +337,7 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
     <div class="found" id="foundList"></div>
     <div class="stage"><svg id="resultSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
     <p class="hint" style="margin:0">Orange = date boxes and amount box, green = lines. Anything not found uses the standard position, and you can fix it later under Advanced.</p>
+    <div class="btns"><button type="button" id="turn180">⟳ Picture is upside down? Turn it</button></div>
     <div class="btns" style="justify-content:flex-end"><button type="button" id="dlgBack">Back</button><button type="button" class="primary" id="dlgUse">Use this layout</button></div>
   </div>
 </dialog>
@@ -988,19 +990,31 @@ function openPhoto(file){
   const url=URL.createObjectURL(file), img=new Image();
   img.onload=()=>{const sc=Math.min(1,2200/Math.max(img.width,img.height)),w=Math.round(img.width*sc),h=Math.round(img.height*sc);
     const c=document.createElement("canvas");c.width=w;c.height=h;const x=c.getContext("2d");x.drawImage(img,0,0,w,h);URL.revokeObjectURL(url);
-    const data=x.getImageData(0,0,w,h).data; const found=ChequeReader.findCorners(data,w,h);
-    PH={data,w,h,url:c.toDataURL("image/jpeg",0.85),corners:found.corners};
-    const lay=L(), W0=lay.mode==="excel"?178:lay.w, asp=ChequeReader.estimateAspect(found.corners);
-    $("dlgW").value=W0; $("dlgH").value=Math.max(60,Math.min(95,Math.round(W0/asp*2)/2));
-    $("sizeNote").textContent=found.found?"Measure the cheque with a ruler and correct these numbers if needed. The height was guessed from the photo, and a photo taken at an angle can make that guess wrong.":"The whole picture is taken as the cheque (good for scans). Measure the cheque with a ruler and correct the size if needed.";
+    setPhoto(c);
+    const lay=L(), W0=lay.mode==="excel"?178:lay.w; $("dlgW").value=W0; guessHeight();
+    $("sizeNote").textContent=PH.found?"Measure the cheque with a ruler and correct these numbers if needed. The height was guessed from the photo, and a photo taken at an angle can make that guess wrong.":"The whole picture is taken as the cheque (good for scans). Measure the cheque with a ruler and correct the size if needed.";
     cornerSvg(); $("dlgStep1").hidden=false; $("dlgStep2").hidden=true; $("photoDlg").showModal();};
   img.onerror=()=>say("This picture could not be opened.","bad"); img.src=url;
 }
+function setPhoto(canvas){const x=canvas.getContext("2d"),w=canvas.width,h=canvas.height,data=x.getImageData(0,0,w,h).data;
+  const f=ChequeReader.findCorners(data,w,h); PH={data,w,h,canvas,url:canvas.toDataURL("image/jpeg",0.85),corners:f.corners,found:f.found};}
+function guessHeight(){const W0=parseFloat($("dlgW").value)||178, asp=ChequeReader.estimateAspect(PH.corners); $("dlgH").value=Math.max(60,Math.min(95,Math.round(W0/Math.max(asp,1/asp)*2)/2));}
+function rotatePhoto(dir){const c=document.createElement("canvas");c.width=PH.h;c.height=PH.w;const x=c.getContext("2d");
+  x.translate(c.width/2,c.height/2);x.rotate(dir*Math.PI/2);x.drawImage(PH.canvas,-PH.w/2,-PH.h/2);setPhoto(c);guessHeight();cornerSvg();}
+$("rotL").addEventListener("click",()=>rotatePhoto(-1));
+$("rotR").addEventListener("click",()=>rotatePhoto(1));
+$("cornersAuto").addEventListener("click",()=>{setPhoto(PH.canvas);guessHeight();cornerSvg();});
+$("cornersAll").addEventListener("click",()=>{PH.corners=[[0,0],[PH.w,0],[PH.w,PH.h],[0,PH.h]];if(PH.h>PH.w)PH.corners=ChequeReader.turn(PH.corners,3);guessHeight();cornerSvg();});
 let RES=null;
 $("dlgRead").addEventListener("click",()=>{
   const W=parseFloat($("dlgW").value),H=parseFloat($("dlgH").value);
   if(!(W>=120&&W<=230&&H>=55&&H<=110)){$("sizeNote").textContent="Enter a width between 120 and 230 mm and a height between 55 and 110 mm.";return;}
-  const r=ChequeReader.read(PH.data,PH.w,PH.h,PH.corners,W,H);
+  const r=ChequeReader.readBest(PH.data,PH.w,PH.h,PH.corners,W,H); PH.corners=r.corners; showResult(r,W,H);
+});
+$("turn180").addEventListener("click",()=>reread(2));
+function reread(k){PH.corners=ChequeReader.turn(PH.corners,k);const W=parseFloat($("dlgW").value),H=parseFloat($("dlgH").value);
+  const r=ChequeReader.read(PH.data,PH.w,PH.h,PH.corners,W,H); showResult({fields:r.fields,image:r.image},W,H);}
+function showResult(r,W,H){
   const c=document.createElement("canvas");c.width=r.image.w;c.height=r.image.h;c.getContext("2d").putImageData(new ImageData(r.image.data,r.image.w,r.image.h),0,0);
   RES={F:r.fields,W,H,url:c.toDataURL("image/jpeg",0.8)};
   const F=r.fields, sv=$("resultSvg"); sv.setAttribute("viewBox",`0 0 ${W} ${H}`); sv.innerHTML="";
@@ -1012,7 +1026,7 @@ $("dlgRead").addEventListener("click",()=>{
   const nl=F.lines.length, item=(ok,t)=>`<span class="${ok?"y":"n"}">${ok?"✓":"✗"} ${t}</span>`;
   $("foundList").innerHTML=item(F.date&&F.date.length>=5,F.date?F.date.length+" date boxes":"Date boxes")+item(nl>=1,"Pay line")+item(nl>=2,nl>=3?"2 amount-in-words lines":"Amount-in-words lines")+item(!!F.amount,"Amount box");
   $("dlgStep1").hidden=true; $("dlgStep2").hidden=false;
-});
+}
 $("dlgBack").addEventListener("click",()=>{$("dlgStep1").hidden=false;$("dlgStep2").hidden=true;});
 $("dlgCancel").addEventListener("click",()=>$("photoDlg").close());
 $("dlgUse").addEventListener("click",()=>{
