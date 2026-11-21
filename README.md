@@ -48,6 +48,9 @@ Under the preview there are three options:
 3. **Whole print a little off?**: after a test print, move everything together in 1 mm steps.
 Then click **Save layout**. Field-by-field editing is under *Advanced*.
 
+When you change `banks.js` or `cheque-reader.js`, bump the `?v=` number on their `<script>` tags in
+`cheque-printer/index.html`, so browsers load the new file instead of a cached copy.
+
 ### First-time calibration (once per bank / cheque book)
 1. Click **Test print (plain paper)** and print it on plain A4 at 100%.
 2. Hold the printout behind a blank cheque against the light and check where the text falls.
