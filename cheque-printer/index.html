@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="banks.js?v=2026112103"></script>
-<script src="cheque-reader.js?v=2026112103"></script>
+<script src="banks.js?v=2026112104"></script>
+<script src="cheque-reader.js?v=2026112104"></script>
 <style>
 :root{
   /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
@@ -1009,7 +1009,12 @@ let RES=null;
 $("dlgRead").addEventListener("click",()=>{
   const W=parseFloat($("dlgW").value),H=parseFloat($("dlgH").value);
   if(!(W>=120&&W<=230&&H>=55&&H<=110)){$("sizeNote").textContent="Enter a width between 120 and 230 mm and a height between 55 and 110 mm.";return;}
-  const r=ChequeReader.readBest(PH.data,PH.w,PH.h,PH.corners,W,H); PH.corners=r.corners; showResult(r,W,H);
+  $("dlgRead").disabled=true; $("dlgRead").textContent="Reading…";
+  setTimeout(()=>{try{
+    const r=ChequeReader.readBest?ChequeReader.readBest(PH.data,PH.w,PH.h,PH.corners,W,H):Object.assign({corners:PH.corners},ChequeReader.read(PH.data,PH.w,PH.h,PH.corners,W,H));
+    PH.corners=r.corners; showResult(r,W,H);
+  }catch(err){$("sizeNote").textContent="The cheque could not be read ("+(err&&err.message||err)+"). Press Ctrl+F5 to reload the page and try again.";}
+  finally{$("dlgRead").disabled=false; $("dlgRead").textContent="Read cheque";}},30);
 });
 $("turn180").addEventListener("click",()=>reread(2));
 function reread(k){PH.corners=ChequeReader.turn(PH.corners,k);const W=parseFloat($("dlgW").value),H=parseFloat($("dlgH").value);
