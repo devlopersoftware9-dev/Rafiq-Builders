@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="banks.js?v=2026112111"></script>
-<script src="cheque-reader.js?v=2026112111"></script>
+<script src="banks.js?v=2026112112"></script>
+<script src="cheque-reader.js?v=2026112112"></script>
 <style>
 :root{
   /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
@@ -586,9 +586,15 @@ function renderExcel(lay,D){
     r.lines.forEach(l=>el("text",{x:l.x,y:l.y,"font-size":r.size*PT,"font-family":b.font==="times"?"Constantia, Times New Roman, serif":"Arial, Helvetica","font-weight":b.bold?"bold":"normal",fill:ink,"text-anchor":r.align==="right"?"end":r.align==="center"?"middle":"start",style:"white-space:pre"},g,l.t));
   });
   drawRowGuide(lay); drawGuides(); selectedHandles(); CUR=null;
-  // The preview frame stays the same size while you move or resize things (re-centred after Save or Discard).
-  const pad=Math.max(8,vb.w*0.08); svg.setAttribute("viewBox",`${-pad} ${-pad} ${vb.w+2*pad} ${vb.h+2*pad}`);
-  svg.firstChild.setAttribute("x",-pad);svg.firstChild.setAttribute("y",-pad);svg.firstChild.setAttribute("width",vb.w+2*pad);svg.firstChild.setAttribute("height",vb.h+2*pad);
+  // Fit the preview to everything (print area, boxes, date labels). While dragging, keep the frame still
+  // so the mouse-to-mm scale does not change under the pointer; it fits again when you let go.
+  const tx=lay.origin.x-vb.x, ty=lay.origin.y-vb.y; const rs=[{x:0,y:0,w:A.w,h:A.h}];
+  Object.keys(lay.boxes).forEach(k=>{const q=lay.boxes[k];if(q.style==="boxes"){(dateRects(lay)||[]).forEach(r=>rs.push({x:r.x,y:r.y-3,w:r.w,h:r.h+6}));}else rs.push(q);});
+  let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity; rs.forEach(r=>{x1=Math.min(x1,r.x+tx);y1=Math.min(y1,r.y+ty-4);x2=Math.max(x2,r.x+r.w+tx);y2=Math.max(y2,r.y+r.h+ty);});
+  if(drag&&LASTVB) [x1,y1,x2,y2]=LASTVB; else LASTVB=[x1,y1,x2,y2];
+  const pad=Math.max(6,(x2-x1)*0.05);
+  svg.setAttribute("viewBox",`${x1-pad} ${y1-pad} ${x2-x1+2*pad} ${y2-y1+2*pad}`);
+  svg.firstChild.setAttribute("x",x1-pad);svg.firstChild.setAttribute("y",y1-pad);svg.firstChild.setAttribute("width",x2-x1+2*pad);svg.firstChild.setAttribute("height",y2-y1+2*pad);
   $("wordsTxt").textContent=D.words||"-";
   $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm ${lay.fromPhoto?"cheque":"print area"}`;
   $("layoutBank").textContent=S.bank;
