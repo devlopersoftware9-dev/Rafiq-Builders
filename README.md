@@ -1,8 +1,19 @@
 # Rafiq-Builders
 
+Tools dashboard: https://devlopersoftware9-dev.github.io/Rafiq-Builders/
+
+| Tool | Folder | Link |
+|---|---|---|
+| Cheque Printer | `cheque-printer/` | https://devlopersoftware9-dev.github.io/Rafiq-Builders/cheque-printer/ |
+
+### Adding a new tool
+1. Create a folder for it (e.g. `bank-reconciliation/`) with its own `index.html`.
+2. Add one entry to the `TOOLS` list in the root `index.html`.
+3. Link back to the dashboard from the tool with `<a href="../">`.
+
 ## Cheque Printer
 
-Browser-based tool to fill and print bank cheques on a printer. No server or installation needed: open `index.html` in Chrome or Edge.
+Browser-based tool to fill and print bank cheques on a printer. No server or installation needed: open `cheque-printer/index.html` in Chrome or Edge.
 
 ### Features
 - Date printed as `DDMMYYYY` in the 8 date boxes (SBP standard, PSD Circular No. 1 of 2014)
@@ -30,6 +41,3 @@ Browser-based tool to fill and print bank cheques on a printer. No server or ins
 
 Layouts and the register are saved in the browser (localStorage). Use **Layout file save karein** to back up the layouts or move them to another PC.
 
-### Hosting on GitHub Pages (optional)
-Settings → Pages → Source: *Deploy from a branch* → Branch: `main`, folder `/ (root)`.
-The tool will then open at `https://devlopersoftware9-dev.github.io/rafiq-builders/`.
