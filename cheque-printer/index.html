@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="banks.js?v=2026112105"></script>
-<script src="cheque-reader.js?v=2026112105"></script>
+<script src="banks.js?v=2026112106"></script>
+<script src="cheque-reader.js?v=2026112106"></script>
 <style>
 :root{
   /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
@@ -217,6 +217,7 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
           <div class="tile">
             <h3>Whole print a little off?</h3>
             <p>After a test print, move everything together. Each click moves 1 mm.</p>
+            <p><b>Putting the cheque in the printer:</b> all banks print on Letter, landscape, the same as your Excel templates, so put the cheque in the same way as before. Not sure? Print <i>Test print (plain paper)</i>: it shows where the cheque sits.</p>
             <div class="pad big">
               <button type="button" data-moveall="-1,0" aria-label="Move everything left">←</button>
               <button type="button" data-moveall="0,-1" aria-label="Move everything up">↑</button>
@@ -450,10 +451,14 @@ function excelWords(a){
 function excelFig(a){return "="+a.rs.toLocaleString("en-IN")+(a.paisa?"."+String(a.paisa).padStart(2,"0"):"")+"/-";}
 // Lay text into a cell box like Excel: padding, horizontal/vertical alignment, wrap and shrink-to-fit.
 function boxLines(b,text){
-  const padX=0.5, padY=0.3; let size=b.size; const avail=b.w-2*padX;
+  const padX=0.5, padY=0.3; let size=b.size; const avail=b.w-2*padX, ind=b.indent1||0;
   if(b.shrink){while(size>5&&textW(text,size,b.font,b.bold)>avail)size-=0.25;}
   let lines=[text];
-  if(b.wrap){lines=[];let cur="";text.split(" ").forEach(wd=>{const t=cur?cur+" "+wd:wd;if(cur&&textW(t,size,b.font,b.bold)>avail){lines.push(cur);cur=wd;}else cur=t;});if(cur)lines.push(cur);}
+  if(b.wrap){lines=[];let cur="";text.split(" ").forEach(wd=>{const t=cur?cur+" "+wd:wd;const room=avail-(lines.length===0?ind:0);if(cur&&textW(t,size,b.font,b.bold)>room){lines.push(cur);cur=wd;}else cur=t;});if(cur)lines.push(cur);}
+  if(b.firstBaseline!=null){ // text sits on the cheque's own printed lines
+    const gap=b.lineGap||1.2*size*PT; const out=lines.map((t,i)=>({t,x:b.x+padX+(i===0?ind:0),y:b.y+b.firstBaseline+i*gap}));
+    return {lines:out,size,align:"left",overflow:out.length>(b.maxLines||9)};
+  }
   const em=size*PT, asc=0.905*em, desc=0.212*em, lh=1.2*em, block=lines.length*lh;
   let top;
   if(b.v_align==="top") top=b.y+padY;
@@ -504,7 +509,7 @@ function renderExcel(lay,D){
   CUR=el("g",{transform:`translate(${r1(lay.origin.x-vb.x)} ${r1(lay.origin.y-vb.y)})`});
   const ga=el("g",{class:"fld area"+(SEL==="area"?" sel":""),"data-f":"area"});
   el("rect",{x:0,y:0,width:A.w,height:A.h,fill:"transparent",stroke:SEL==="area"?"#c2410c":"#9fb3ab","stroke-width":SEL==="area"?0.4:0.25,"stroke-dasharray":"1.2 0.8"},ga);
-  el("text",{x:0,y:-1.5,"font-size":2.2,fill:SEL==="area"?"#c2410c":"#7c948b","font-family":"Helvetica, Arial"},ga,"Print area (drag to move everything together)");
+  el("text",{x:0,y:-1.5,"font-size":2.2,fill:SEL==="area"?"#c2410c":"#7c948b","font-family":"Helvetica, Arial"},ga,lay.fromPhoto?"Cheque edges (drag to move everything together)":"Print area (drag to move everything together)");
   const ink="#0b3a8c", T=excelTexts(D,false); const warns=[];
   Object.keys(BOXN).forEach(k=>{
     const b=lay.boxes[k]; const g=el("g",{class:"fld"+(SEL===k?" sel":""),"data-f":k});
@@ -535,7 +540,7 @@ function renderExcel(lay,D){
   svg.setAttribute("viewBox",`${x1-m} ${y1-m} ${x2-x1+2*m} ${y2-y1+2*m}`);
   svg.firstChild.setAttribute("x",x1-m);svg.firstChild.setAttribute("y",y1-m);svg.firstChild.setAttribute("width",x2-x1+2*m);svg.firstChild.setAttribute("height",y2-y1+2*m);
   $("wordsTxt").textContent=D.words||"-";
-  $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm print area`;
+  $("sizePill").textContent=`${lay.page.paper} landscape · ${A.w.toFixed(0)} × ${A.h.toFixed(0)} mm ${lay.fromPhoto?"cheque":"print area"}`;
   $("layoutBank").textContent=S.bank;
   const st=layoutStatus(); const stp=$("statusPill"); stp.textContent=st.text; stp.className="pill st-"+st.cls;
   if($("amount").value && !D.a) warns.unshift("Invalid amount. Enter numbers only, for example 25000 or 25000.50.");
@@ -545,6 +550,7 @@ function applyModeUI(){
   const ex=isExcel();
   ["numbering","figstyle","payeeOnly","strikeBearer","rupeesPrefix","upper","paper","cw","ch","photoFile","showPhoto","btnPhotoDel"].forEach(id=>{$(id).disabled=ex;});
   $("modeNote").classList.toggle("show",ex);
+  $("modeNote").textContent=ex&&L().fromPhoto?"This bank's layout was read from a cheque photo. It prints like your Excel cheques: Letter landscape, and the same date, amount and words format.":"This bank uses the layout from your Excel template. Date, amount and words are printed in the same format as Excel, so the format options below do not apply.";
 }
 function render(){
   applyModeUI(); queueMicrotask(updateSaveBar);
@@ -814,7 +820,9 @@ function makePdfExcel(test){
   doc.setTextColor(0,0,0);
   if(test){doc.setLineWidth(0.2);doc.setDrawColor(150);doc.rect(ox,oy,lay.area.w,lay.area.h);
     Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k];doc.rect(ox+b.x,oy+b.y,b.w,b.h);});
-    doc.setFont("helvetica","normal");doc.setFontSize(6);doc.setTextColor(120);doc.text(`TEST PRINT • ${S.bank} • ${lay.page.paper} landscape • offset ${S.offX}/${S.offY}`,ox,oy+lay.area.h+4);doc.setTextColor(0);}
+    doc.setFont("helvetica","normal");doc.setFontSize(6);doc.setTextColor(120);doc.text(`TEST PRINT • ${S.bank} • ${lay.page.paper} landscape • offset ${S.offX}/${S.offY}`,ox,oy+lay.area.h+4);
+    if(lay.fromPhoto){doc.setFontSize(9);doc.text("The cheque goes here (this box is the cheque's edges)",ox+3,oy+lay.area.h-4);}
+    doc.setTextColor(0);}
   const T=excelTexts(D,test);
   Object.keys(BOXN).forEach(k=>{const b=lay.boxes[k]; if(!T[k])return;
     if(k==="date"&&b.style==="boxes"){doc.setFont(b.font||"helvetica",b.bold?"bold":"normal");doc.setFontSize(b.size);
@@ -932,7 +940,7 @@ function moveAll(dx,dy){const lay=L();
   else{lay.shift=lay.shift||{x:0,y:0};lay.shift.x=r1(lay.shift.x+dx);lay.shift.y=r1(lay.shift.y+dy);}
   markEdited();buildLayoutTable();render();}
 function moveStateText(){const lay=L();let dx,dy;
-  if(lay.mode==="excel"){const base=presetFor(S.bank);if(!base||base.mode!=="excel")return "";dx=r1(lay.origin.x-base.origin.x);dy=r1(lay.origin.y-base.origin.y);}
+  if(lay.mode==="excel"){const base=lay.fromPhoto?{origin:feedPos()}:presetFor(S.bank);if(!base||!base.origin)return "";dx=r1(lay.origin.x-base.origin.x);dy=r1(lay.origin.y-base.origin.y);}
   else{dx=(lay.shift&&lay.shift.x)||0;dy=(lay.shift&&lay.shift.y)||0;}
   if(!dx&&!dy) return "Print is at the bank's default position.";
   const p=[];if(dx)p.push(Math.abs(dx)+" mm "+(dx>0?"right":"left"));if(dy)p.push(Math.abs(dy)+" mm "+(dy>0?"down":"up"));return "Print moved "+p.join(", ")+".";}
@@ -950,6 +958,28 @@ $("btnCopyFrom").addEventListener("click",()=>{const from=$("copyFrom").value;if
 
 /* ---------- set up from a cheque photo ---------- */
 let PH=null; // {data,w,h,url,corners}
+// Where the cheque's top-left corner lands on the Letter-landscape page, when the cheque is put in the
+// printer the same way as for the office Excel templates. Worked out from the Meezan Excel template and
+// a photo of a Meezan cheque (date, amount box and words agree within about 1-2 mm).
+const FEED_DEFAULT={x:91.2,y:65.1};
+function feedPos(){return S.feed||FEED_DEFAULT;}
+function fieldsToExcelLayout(F,W,H){
+  const std=fieldsToLayout(F,W,H); // standard read (fills anything not found with standard positions)
+  const d=std.date, pitch=d.pitch, bh=F.date&&F.date.length?r1(Math.max(...F.date.map(b=>b.h))+0.6):6.5;
+  const cy0=d.y-0.716*d.size*PT/2; // centre of the first box
+  const date={style:"boxes",x:r1(d.x-pitch/2),y:r1(cy0-bh/2),pitch,bh,gap:0,size:d.size,bold:false,font:"helvetica",
+    offs:d.offs.map(o=>({x:o.x,y:o.y}))}; date.w=r1(8*pitch); date.h=bh;
+  const p=std.payee, payee={x:r1(p.x-0.5),y:r1(p.y-6),w:r1(p.maxw+1),h:7.3,font:"helvetica",size:11,bold:false,h_align:"left",v_align:"bottom",wrap:false,shrink:true};
+  const w1=std.words1, w2=std.words2, gap=r1(w2.y-w1.y);
+  const left=Math.min(w1.x,w2.x), right=Math.max(w1.x+w1.maxw,w2.x+w2.maxw);
+  const words={x:r1(left-0.5),y:r1(w1.y-6),w:r1(right-left+1),h:r1(gap+8),font:"helvetica",size:10.5,bold:false,h_align:"left",v_align:"top",wrap:true,shrink:false,
+    firstBaseline:6,lineGap:gap>3?gap:4.6,indent1:r1(w1.x-left),maxLines:2};
+  const f=std.figures, a=F.amount, figures=a?{x:r1(f.x-0.5),y:r1(a.y),w:r1(a.x+a.w-f.x-0.5),h:r1(a.h),font:"helvetica",size:f.size,bold:true,h_align:"left",v_align:"center",wrap:false,shrink:true}
+    :{x:r1(f.x-0.5),y:r1(f.y-6),w:35,h:7.5,font:"helvetica",size:12,bold:true,h_align:"left",v_align:"bottom",wrap:false,shrink:true};
+  return {mode:"excel",page:{w:279.4,h:215.9,paper:"Letter"},origin:{x:feedPos().x,y:feedPos().y},scale:1,area:{w:W,h:H},
+    boxes:{date,payee,words,figures},payeePrefix:"",wordsPrefix:"= ",dateFormat:"DDMMYYYY",wordsStyle:"excel-lakh",figStyle:"eq-lakh",
+    source:"Read from cheque photo",fromPhoto:true};
+}
 function fieldsToLayout(F,W,H){
   const sx=W/STD.w, sy=H/STD.h, lay=clone(STD); lay.w=W; lay.h=H;
   ["date","payee","words1","words2","figures","payeeOnly"].forEach(k=>{lay[k].x=r1(lay[k].x*sx);lay[k].y=r1(lay[k].y*sy);if(lay[k].maxw)lay[k].maxw=r1(lay[k].maxw*sx);});
@@ -1037,10 +1067,9 @@ function showResult(r,W,H){
 $("dlgBack").addEventListener("click",()=>{$("dlgStep1").hidden=false;$("dlgStep2").hidden=true;});
 $("dlgCancel").addEventListener("click",()=>$("photoDlg").close());
 $("dlgUse").addEventListener("click",()=>{
-  DRAFT[S.bank]=fieldsToLayout(RES.F,RES.W,RES.H); delete VIEWBASE[S.bank]; SEL=null;
-  try{localStorage.setItem(photoKey(),RES.url);S.showPhoto=true;$("showPhoto").checked=true;persist();}catch(e){}
-  $("photoDlg").close(); buildLayoutTable(); render();
-  say("Layout read from the photo. Click Test print (plain paper), hold it over the cheque, use the arrows if the whole print is off, then click Save layout.","ok");
+  DRAFT[S.bank]=fieldsToExcelLayout(RES.F,RES.W,RES.H); delete VIEWBASE[S.bank]; SEL=null; LASTVB=null;
+  $("photoDlg").close(); $("advanced").open=true; buildLayoutTable(); render();
+  say("Boxes read from the photo. The cheque prints on Letter landscape, in the same place as your Excel cheques. Do a test print on a real cheque, use the arrows if the whole print is off, then click Save layout.","ok");
 });
 const dz=$("dropZone");
 $("chequePhoto").addEventListener("change",e=>{openPhoto(e.target.files[0]);e.target.value="";});
