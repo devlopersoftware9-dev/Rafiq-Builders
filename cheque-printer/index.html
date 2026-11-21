@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="banks.js?v=2026112107"></script>
-<script src="cheque-reader.js?v=2026112107"></script>
+<script src="banks.js?v=2026112108"></script>
+<script src="cheque-reader.js?v=2026112108"></script>
 <style>
 :root{
   /* Layout: tool page. Left = cheque form, right = cheque preview and layout calibration; register below. */
@@ -80,6 +80,7 @@ td input{padding:4px 6px;font-size:12.5px;width:72px}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .layout-grid{overflow-x:auto}
 .st-ready{color:var(--ok)!important;border-color:var(--ok)!important}
+.st-std{color:#1d4ed8!important;border-color:#1d4ed8!important}
 .st-todo{color:var(--warn)!important;border-color:var(--warn)!important}
 .st-edited{color:var(--accent)!important;border-color:var(--accent)!important}
 .simple{display:grid;gap:10px;margin-top:12px}
@@ -93,6 +94,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .copyrow{display:flex;gap:6px;flex-wrap:wrap}
 .copyrow select{flex:1;min-width:130px}
 .pad.big button{font-size:16px;padding:6px 14px}
+.feednote{font-size:12.5px;color:var(--muted)}
+.feednote b{color:var(--ink)}
 .movestate{font-size:12px;color:var(--muted)}
 #advanced{margin-top:2px}
 #advanced>summary{font-size:13px}
@@ -170,7 +173,7 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
 <section class="bankview" id="bankView" aria-label="Choose a bank" hidden>
   <div class="bv-top">
     <label for="bankSearch" class="bv-search">Find a bank<input id="bankSearch" type="search" placeholder="Type a bank name"></label>
-    <div class="bv-legend"><span class="pill st-ready">Ready</span> set up and ready to print <span class="pill st-todo">Not set up</span> needs a cheque photo or a copied layout</div>
+    <div class="bv-legend"><span class="pill st-ready">Ready</span> set up and ready to print <span class="pill st-std">SBP standard</span> uses the State Bank standard cheque layout</div>
   </div>
   <div class="bv-grid" id="bankGrid"></div>
 </section>
@@ -236,13 +239,13 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
           </div>
           <div class="tile">
             <h3>Same layout as another bank</h3>
-            <p>If this cheque looks like another bank's cheque, copy that bank's layout.</p>
+            <p>Copy another bank's layout, or go back to the SBP standard layout.</p>
             <div class="copyrow"><select id="copyFrom" aria-label="Copy the layout from"></select><button type="button" id="btnCopyFrom">Use this layout</button></div>
           </div>
           <div class="tile">
             <h3>Whole print a little off?</h3>
             <p>After a test print, move everything together. Each click moves 1 mm.</p>
-            <p><b>Putting the cheque in the printer:</b> all banks print on Letter, landscape, the same as your Excel templates, so put the cheque in the same way as before. Not sure? Print <i>Test print (plain paper)</i>: it shows where the cheque sits.</p>
+            <div class="feednote" id="feedNote"></div>
             <div class="pad big">
               <button type="button" data-moveall="-1,0" aria-label="Move everything left">←</button>
               <button type="button" data-moveall="0,-1" aria-label="Move everything up">↑</button>
@@ -295,7 +298,8 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
           <div class="row2">
             <label for="paper">Paper in printer
               <select id="paper">
-                <option value="cheque">Cheque only (cheque-size page)</option>
+                <option value="feed">Cheque only, date and amount side goes in first (SBP standard)</option>
+                <option value="cheque">Cheque only, top edge goes in first</option>
                 <option value="a4left">A4, cheque at top-left</option>
                 <option value="a4center">A4, cheque at top-centre</option>
               </select>
@@ -373,18 +377,21 @@ dialog#photoDlg::backdrop{background:rgba(10,20,30,.55)}
 const $=id=>document.getElementById(id);
 const BANKS=["Allied Bank (ABL)","Askari Bank","Bank Al Habib","Bank Alfalah","BankIslami","Bank of Punjab (BOP)","Dubai Islamic Bank","Faysal Bank","Habib Bank (HBL)","Habib Metropolitan","JS Bank","MCB Bank","MCB Islamic","Meezan Bank","National Bank (NBP)","Silkbank","Sindh Bank","Soneri Bank","Standard Chartered","The Bank of Khyber","United Bank (UBL)","Al Baraka Bank","First Women Bank","Summit Bank","Samba Bank"];
 // SBP standard (PSD Circular 1 of 2014): cheque 17-18 cm x 7-8.5 cm, date DDMMYYYY in 8 boxes top-right, amount in figures after pre-printed "PKR".
+// SBP standard layout (PSD Circular 1 of 2014 specimen): logo and bank top-left, cheque no. and
+// date boxes DDMMYYYY top-right, Pay line ending in "or bearer", two Rupees lines, PKR box at the right.
 const STD={w:178,h:80,
-  date:{x:133,y:14,pitch:5.5,size:11},
-  payee:{x:20,y:27,maxw:122,size:11},
-  words1:{x:32,y:36.5,maxw:133},
-  words2:{x:10,y:45,maxw:112},
+  date:{x:133,y:14.5,pitch:5.5,size:11},
+  payee:{x:17,y:23.5,maxw:100,size:11},
+  words1:{x:31,y:32,maxw:100},
+  words2:{x:15,y:40,maxw:116},
   wordsSize:10.5,
-  figures:{x:140,y:46,size:12},
-  payeeOnly:{x:72,y:18,angle:12,size:8},
-  bearer:{x1:146,x2:168,y:25.5}};
+  figures:{x:140,y:35,size:12},
+  payeeOnly:{x:70,y:15,angle:12,size:8},
+  bearer:{x1:118,x2:136,y:22.5}};
 const clone=o=>JSON.parse(JSON.stringify(o));
-let S={bank:"United Bank (UBL)",custom:[],layouts:{},paper:"cheque",offX:0,offY:0,numbering:"intl",figstyle:"plain",payeeOnly:true,strikeBearer:false,rupeesPrefix:false,upper:false,guides:false,register:[]};
+let S={bank:"United Bank (UBL)",custom:[],layouts:{},paper:"feed",offX:0,offY:0,numbering:"intl",figstyle:"plain",payeeOnly:true,strikeBearer:false,rupeesPrefix:false,upper:false,guides:false,register:[]};
 try{const raw=localStorage.getItem("chq-printer-v1"); if(raw) S=Object.assign(S,JSON.parse(raw));}catch(e){}
+if(S.paperV!==2){S.paper="feed";S.paperV=2;}
 function persist(){try{localStorage.setItem("chq-printer-v1",JSON.stringify(S));}catch(e){}}
 const PRESETS=window.BANK_PRESETS||{};
 function presetFor(b){return PRESETS[b]?Object.assign(clone(STD),clone(PRESETS[b])):null;}
@@ -427,7 +434,7 @@ function layoutStatus(){
   if(isDirty()) return {cls:"todo",text:"Unsaved changes"};
   if(S.edited&&S.edited[S.bank]) return {cls:"edited",text:"Saved on this computer"};
   if(PRESETS[S.bank]) return {cls:"ready",text:PRESETS[S.bank].mode==="excel"?"Saved from Excel template":"Saved bank layout"};
-  return {cls:"todo",text:"Layout not set up yet (standard size)"};
+  return {cls:"std",text:"SBP standard layout"};
 }
 
 /* ---------- amount to words ---------- */
@@ -748,8 +755,17 @@ function taller(d){const lay=L(),o=selObj();if(!o||lay.mode!=="excel"||boxIndex(
 function toggleBold(){const o=boxIndex(SEL)>=0?L().boxes.date:selObj();if(!o||L().mode!=="excel")return;o.bold=!o.bold;markEdited();render();}
 function updateRowState(){const c=rowCheck(L());const e=$("rowState");if(!c){e.textContent="";e.className="rowstate";return;}
   e.textContent=(c.ok?"✓ ":"⚠ ")+rowMessage(c);e.className="rowstate "+(c.ok?"ok":"bad");}
+function updateFeedNote(){
+  const lay=L(), e=$("feedNote");
+  if(lay.mode==="excel"){e.innerHTML="<b>Putting the cheque in the printer:</b> this bank prints on Letter, landscape, the same as your Excel templates, so put the cheque in the same way as before. Not sure? Print <i>Test print (plain paper)</i>: it shows where the cheque sits.";return;}
+  if(S.paper==="feed"){e.innerHTML=`<b>Putting the cheque in the printer:</b> the <b>date and amount side</b> (right edge) goes in first, printing side as marked on your printer.
+    <svg viewBox="0 0 120 58" width="160" aria-hidden="true" style="display:block;margin-top:6px"><rect x="20" y="2" width="80" height="10" rx="2" fill="none" stroke="currentColor"/><text x="60" y="9.5" font-size="6" text-anchor="middle" fill="currentColor">printer</text>
+    <rect x="44" y="18" width="32" height="38" rx="1.5" fill="none" stroke="currentColor"/><g fill="currentColor" font-size="4.2"><text x="60" y="24" text-anchor="middle">DATE · PKR</text><text x="60" y="52" text-anchor="middle">bank name</text></g>
+    <path d="M60 30 V14" stroke="#c2410c" stroke-width="1.6"/><path d="M56 18 L60 13 L64 18" fill="none" stroke="#c2410c" stroke-width="1.6"/></svg>`;return;}
+  e.innerHTML="<b>Putting the cheque in the printer:</b> see <i>Paper in printer</i> under Layout &amp; printer settings. Print a test page on plain paper first.";
+}
 function updateSaveBar(){
-  updateRowState(); $("moveState").textContent=moveStateText();
+  updateRowState(); updateFeedNote(); $("moveState").textContent=moveStateText();
   const dirty=isDirty(); $("btnSaveLayout").disabled=!dirty; $("btnDiscard").disabled=!dirty;
   $("saveState").textContent=dirty?"You have unsaved changes for "+S.bank+".":"Layout for "+S.bank+" is saved.";
   $("saveState").className="save-state"+(dirty?" dirty":"");
@@ -861,35 +877,44 @@ function makePdfExcel(test){
 function makePdf(test){
   if(isExcel()) return makePdfExcel(test);
   const {jsPDF}=window.jspdf; const lay=L(); const D=data();
-  let pw=lay.w,ph=lay.h,ox=S.offX+((lay.shift&&lay.shift.x)||0),oy=S.offY+((lay.shift&&lay.shift.y)||0);
-  if(S.paper!=="cheque"){pw=210;ph=297;if(S.paper==="a4center")ox+= (210-lay.w)/2;}
+  const ox=S.offX+((lay.shift&&lay.shift.x)||0), oy=S.offY+((lay.shift&&lay.shift.y)||0);
+  // "feed": cheque-size page turned a quarter turn, so the cheque goes into the printer
+  // right edge first (the date and amount side). Cheque point (x,y) -> page (y, W - x); text runs upwards.
+  const feed=S.paper==="feed";
+  let pw=lay.w,ph=lay.h,cx0=0;
+  if(feed){pw=lay.h;ph=lay.w;} else if(S.paper==="a4left"||S.paper==="a4center"){pw=210;ph=297;if(S.paper==="a4center")cx0=(210-lay.w)/2;}
   const doc=new jsPDF({unit:"mm",format:[pw,ph],orientation:pw>ph?"landscape":"portrait"});
   doc.setTextColor(0,0,0); doc.setDrawColor(0,0,0); doc.setFont("helvetica","normal");
-  const X=v=>v+ox, Y=v=>v+oy;
+  const M=(x,y)=>{x+=ox+cx0;y+=oy;return feed?[y,lay.w-x]:[x,y];};
+  const line=(x1,y1,x2,y2)=>{const a=M(x1,y1),b=M(x2,y2);doc.line(a[0],a[1],b[0],b[1]);};
+  const rect=(x,y,w,h)=>{line(x,y,x+w,y);line(x+w,y,x+w,y+h);line(x+w,y+h,x,y+h);line(x,y+h,x,y);};
+  const text=(t,x,y,o)=>{o=o||{};if(!t)return;const w=doc.getTextWidth(t);if(o.align==="center")x-=w/2;else if(o.align==="right")x-=w;
+    const p=M(x,y);const ang=(o.angle||0)+(feed?90:0);doc.text(t,p[0],p[1],ang?{angle:ang}:undefined);};
   if(test){
     doc.setLineWidth(0.2); doc.setDrawColor(150);
-    doc.rect(X(0),Y(0),lay.w,lay.h);
+    rect(0,0,lay.w,lay.h);
     doc.setFontSize(6); doc.setTextColor(120);
-    doc.text(`TEST PRINT • ${S.bank} • ${lay.w}x${lay.h} mm • offset ${S.offX}/${S.offY}`,X(4),Y(lay.h-3));
-    [[0,0],[lay.w,0],[0,lay.h],[lay.w,lay.h]].forEach(([x,y])=>{doc.line(X(x)-3,Y(y),X(x)+3,Y(y));doc.line(X(x),Y(y)-3,X(x),Y(y)+3);});
-    for(let i=0;i<8;i++){doc.rect(X(stdDateX(lay.date,i)-lay.date.pitch/2),Y(stdDateY(lay.date,i)-5),lay.date.pitch,6.5);}
-    doc.line(X(lay.payee.x),Y(lay.payee.y+1),X(lay.payee.x+lay.payee.maxw),Y(lay.payee.y+1));
-    doc.line(X(lay.words1.x),Y(lay.words1.y+1),X(lay.words1.x+lay.words1.maxw),Y(lay.words1.y+1));
-    doc.line(X(lay.words2.x),Y(lay.words2.y+1),X(lay.words2.x+lay.words2.maxw),Y(lay.words2.y+1));
+    text(`TEST PRINT • ${S.bank} • ${lay.w}x${lay.h} mm • offset ${S.offX}/${S.offY}`,4,lay.h-3);
+    if(feed){doc.setFontSize(8);text("Put the cheque in the printer this way: the date and amount side goes in first.",4,lay.h-8);}
+    for(let i=0;i<8;i++){rect(stdDateX(lay.date,i)-lay.date.pitch/2,stdDateY(lay.date,i)-5,lay.date.pitch,6.5);}
+    line(lay.payee.x,lay.payee.y+1,lay.payee.x+lay.payee.maxw,lay.payee.y+1);
+    line(lay.words1.x,lay.words1.y+1,lay.words1.x+lay.words1.maxw,lay.words1.y+1);
+    line(lay.words2.x,lay.words2.y+1,lay.words2.x+lay.words2.maxw,lay.words2.y+1);
+    rect(lay.figures.x-12,lay.figures.y-6.5,Math.min(lay.w-(lay.figures.x-12)-3,40),9);
     doc.setTextColor(0);
   }
   const d=D.ddmmyyyy||(test?"01012026":"");
   doc.setFontSize(lay.date.size);
-  d.split("").forEach((c,i)=>doc.text(c,X(stdDateX(lay.date,i)),Y(stdDateY(lay.date,i)),{align:"center"}));
-  doc.setFontSize(lay.payee.size); doc.text(D.payee||(test?"Pay To Sample Name":""),X(lay.payee.x),Y(lay.payee.y));
+  d.split("").forEach((c,i)=>text(c,stdDateX(lay.date,i),stdDateY(lay.date,i),{align:"center"}));
+  doc.setFontSize(lay.payee.size); text(D.payee||(test?"Pay To Sample Name":""),lay.payee.x,lay.payee.y);
   const words=D.words||(test?toWords({rs:335520,paisa:0}):"");
-  if(words){const sp=splitWords(words);doc.setFontSize(sp.pt);doc.text(sp.l1,X(lay.words1.x),Y(lay.words1.y));if(sp.l2)doc.text(sp.l2,X(lay.words2.x),Y(lay.words2.y));}
+  if(words){const sp=splitWords(words);doc.setFontSize(sp.pt);text(sp.l1,lay.words1.x,lay.words1.y);if(sp.l2)text(sp.l2,lay.words2.x,lay.words2.y);}
   const fig=D.fig||(test?"335520":"");
-  doc.setFont("helvetica","bold"); doc.setFontSize(lay.figures.size); doc.text(fig,X(lay.figures.x),Y(lay.figures.y)); doc.setFont("helvetica","normal");
-  if(S.payeeOnly){const po=lay.payeeOnly;doc.setFont("helvetica","bold");doc.setFontSize(po.size);const tw=doc.getTextWidth("A/C PAYEE ONLY");doc.text("A/C PAYEE ONLY",X(po.x),Y(po.y),{angle:po.angle});doc.setFont("helvetica","normal");
+  doc.setFont("helvetica","bold"); doc.setFontSize(lay.figures.size); text(fig,lay.figures.x,lay.figures.y); doc.setFont("helvetica","normal");
+  if(S.payeeOnly){const po=lay.payeeOnly;doc.setFont("helvetica","bold");doc.setFontSize(po.size);const tw=doc.getTextWidth("A/C PAYEE ONLY");text("A/C PAYEE ONLY",po.x,po.y,{angle:po.angle});doc.setFont("helvetica","normal");
     const a=po.angle*Math.PI/180,dx=Math.cos(a),dy=-Math.sin(a),nx=-Math.sin(a),ny=-Math.cos(a),cap=po.size*PT;doc.setLineWidth(0.3);
-    [[cap+1.2],[-1.3]].forEach(([off])=>{const sx=po.x-1.5*dx+nx*off,sy=po.y-1.5*dy+ny*off,ex=po.x+(tw+1.5)*dx+nx*off,ey=po.y+(tw+1.5)*dy+ny*off;doc.line(X(sx),Y(sy),X(ex),Y(ey));});}
-  if(S.strikeBearer){doc.setLineWidth(0.4);doc.line(X(lay.bearer.x1),Y(lay.bearer.y),X(lay.bearer.x2),Y(lay.bearer.y));}
+    [[cap+1.2],[-1.3]].forEach(([off])=>{line(po.x-1.5*dx+nx*off,po.y-1.5*dy+ny*off,po.x+(tw+1.5)*dx+nx*off,po.y+(tw+1.5)*dy+ny*off);});}
+  if(S.strikeBearer){doc.setLineWidth(0.4);line(lay.bearer.x1,lay.bearer.y,lay.bearer.x2,lay.bearer.y);}
   return doc;
 }
 async function saveFile(filename,data){
@@ -975,9 +1000,11 @@ function fillCopyFrom(){
   const ready=all.filter(b=>PRESETS[b]||(S.edited&&S.edited[b])).sort((a,b)=>a.localeCompare(b));
   const rest=all.filter(b=>!ready.includes(b)).sort((a,b)=>a.localeCompare(b));
   const opt=b=>`<option value="${b.replace(/"/g,"&quot;")}">${b.replace(/</g,"&lt;")}</option>`;
-  $("copyFrom").innerHTML=(ready.length?`<optgroup label="Banks already set up">${ready.map(opt).join("")}</optgroup>`:"")+`<optgroup label="Other banks (standard layout)">${rest.map(opt).join("")}</optgroup>`;
+  $("copyFrom").innerHTML=`<option value="__std">SBP standard layout</option>`+(ready.length?`<optgroup label="Banks already set up">${ready.map(opt).join("")}</optgroup>`:"")+`<optgroup label="Other banks (standard layout)">${rest.map(opt).join("")}</optgroup>`;
 }
 $("btnCopyFrom").addEventListener("click",()=>{const from=$("copyFrom").value;if(!from)return;
+  if(from==="__std"){DRAFT[S.bank]=clone(STD);offs(DRAFT[S.bank].date);delete VIEWBASE[S.bank];SEL=null;buildLayoutTable();render();
+    say("SBP standard layout applied to "+S.bank+". Do a test print, then click Save layout.","ok");return;}
   DRAFT[S.bank]=clone(savedLayout(from));delete VIEWBASE[S.bank];SEL=null;buildLayoutTable();render();
   say("Copied the layout from "+from+". Do a test print, then click Save layout to keep it for "+S.bank+".","ok");});
 
@@ -1107,7 +1134,7 @@ function allBanks(){return [...new Set([...BANKS,...(S.custom||[])])];}
 function bankState(b){
   if(S.edited&&S.edited[b]) return {cls:"ready",text:"Ready",sub:"Saved on this computer"};
   if(PRESETS[b]) return {cls:"ready",text:"Ready",sub:PRESETS[b].mode==="excel"?"From your Excel template":"Saved layout"};
-  return {cls:"todo",text:"Not set up",sub:"Standard layout until set up"};
+  return {cls:"std",text:"SBP standard",sub:"Standard SBP cheque layout. Test print once on a real cheque."};
 }
 function renderBankGrid(){
   const q=($("bankSearch").value||"").trim().toLowerCase();
